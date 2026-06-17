@@ -7,7 +7,12 @@ import type { AnalysisAction, AuthSession, Order, OrderAIAnalysis, OrderStatus }
 const NEW_ORDER_GLOW_MS = 4000;
 
 const POLLING_INTERVAL_MS = 3000;
-type BoardTab = "RECEIVED" | "DONE" | "STATS" | "SETTINGS";
+type BoardTab = "RECEIVED" | "DONE" | "MY_TASKS" | "STATS" | "SETTINGS";
+
+type AssignedMenu = {
+  id: string; // client-side uuid
+  name: string;
+};
 
 type SoundOption = "none" | "bell" | "chime" | "beep";
 
@@ -43,6 +48,13 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [newOrderIds, setNewOrderIds] = useState<Set<number>>(new Set());
+  // Assigned menus for "내 업무" tab (local state — no backend)
+  const [assignedMenus, setAssignedMenus] = useState<AssignedMenu[]>([
+    { id: "demo-1", name: "짜장면" },
+    { id: "demo-2", name: "짬뽕" },
+  ]);
+  // completedItemIds lifted to page level so MyTasksPanel can react to KDS completions
+  const [completedItemIds, setCompletedItemIds] = useState<Set<number>>(new Set());
   // Front-only hidden order ids (제거 처리)
   const [hiddenOrderIds, setHiddenOrderIds] = useState<Set<number>>(new Set());
   // Context menu
@@ -367,6 +379,21 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
           </button>
 
           <button
+            className={`kds-sidebar-item${activeTab === "MY_TASKS" ? " active" : ""}`}
+            onClick={() => { setActiveTab("MY_TASKS"); setSidebarOpen(false); }}
+            type="button"
+            title="내 업무"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <circle cx="7" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M2 15c0-2.76 2.24-5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M11 11l1.5 1.5L15 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="13" cy="13" r="3.5" stroke="currentColor" strokeWidth="1.3" />
+            </svg>
+            {sidebarOpen && <span>내 업무</span>}
+          </button>
+
+          <button
             className={`kds-sidebar-item${activeTab === "STATS" ? " active" : ""}`}
             onClick={() => { setActiveTab("STATS"); setSidebarOpen(false); }}
             type="button"
@@ -469,6 +496,15 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
               <span className="kds-tab-count">{doneOrders.length}</span>
             </button>
             <button
+              aria-selected={activeTab === "MY_TASKS"}
+              className={`kds-tab${activeTab === "MY_TASKS" ? " active" : ""}`}
+              onClick={() => setActiveTab("MY_TASKS")}
+              role="tab"
+              type="button"
+            >
+              내 업무
+            </button>
+            <button
               aria-selected={activeTab === "STATS"}
               className={`kds-tab${activeTab === "STATS" ? " active" : ""}`}
               onClick={() => setActiveTab("STATS")}
@@ -528,7 +564,14 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
           <div className="banner">취소 주문 {counts.CANCELLED}건은 보드에서 제외하고 집계로만 관리합니다.</div>
         ) : null}
 
-        {activeTab === "STATS" ? (
+        {activeTab === "MY_TASKS" ? (
+          <MyTasksPanel
+            assignedMenus={assignedMenus}
+            completedItemIds={completedItemIds}
+            onAssignedMenusChange={setAssignedMenus}
+            orders={orders}
+          />
+        ) : activeTab === "STATS" ? (
           <StatsPanel orders={orders} />
         ) : activeTab === "SETTINGS" ? (
           <SettingsPanel
@@ -547,9 +590,15 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
                 {activeOrders.map((order) => (
                   <OrderCard
                     key={order.id}
+                    completedItemIds={completedItemIds}
                     isNew={newOrderIds.has(order.id)}
                     now={now}
                     onContextMenu={(orderId, x, y) => setContextMenu({ orderId, x, y })}
+                    onToggleItemDone={(itemId) => setCompletedItemIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(itemId)) { next.delete(itemId); } else { next.add(itemId); }
+                      return next;
+                    })}
                     onUpdateStatus={updateOrderStatus}
                     order={order}
                     updating={updatingOrderId === order.id}
@@ -838,21 +887,24 @@ async function requestWithReauth<T>(
 const ITEMS_2COL_THRESHOLD = 4;
 
 function OrderCard({
+  completedItemIds,
   isNew,
   now,
   onContextMenu,
+  onToggleItemDone,
   onUpdateStatus,
   order,
   updating,
 }: {
+  completedItemIds: Set<number>;
   isNew: boolean;
   now: number;
   onContextMenu: (orderId: number, x: number, y: number) => void;
+  onToggleItemDone: (itemId: number) => void;
   onUpdateStatus: (orderId: number, status: OrderStatus) => Promise<void>;
   order: Order;
   updating: boolean;
 }) {
-  const [completedItemIds, setCompletedItemIds] = useState<Set<number>>(new Set());
   const longPressTimerRef = useRef<number | null>(null);
 
   const elapsed = formatElapsed(now, order.ordered_at ?? order.created_at);
@@ -862,18 +914,6 @@ function OrderCard({
   const isWarning = elapsedMinutes >= 8 && elapsedMinutes < 15;
   const orderTypeLabel = getOrderTypeLabel(order.platform);
   const use2Col = order.items.length >= ITEMS_2COL_THRESHOLD;
-
-  function toggleItemDone(itemId: number) {
-    setCompletedItemIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) {
-        next.delete(itemId);
-      } else {
-        next.add(itemId);
-      }
-      return next;
-    });
-  }
 
   function handlePointerDown(e: React.PointerEvent<HTMLElement>) {
     if (e.button !== 0) return; // only primary button for long press
@@ -923,11 +963,11 @@ function OrderCard({
             <div
               className={`kds-item${allergyRiskItemIds.has(item.id) ? " allergy-risk" : ""}${isDone ? " item-done" : ""}`}
               key={item.id}
-              onClick={() => toggleItemDone(item.id)}
+              onClick={() => onToggleItemDone(item.id)}
               role="button"
               tabIndex={0}
               aria-pressed={isDone}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleItemDone(item.id); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onToggleItemDone(item.id); }}
             >
               <span className={`kds-item-qty${isDone ? " done" : ""}`}>{item.quantity}</span>
               <div className="kds-item-body">
@@ -1017,6 +1057,283 @@ function RequestPanel({
       ) : null}
       {hasRaw ? <p className="kds-request-text">{rawText}</p> : null}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// My Tasks Panel
+// ─────────────────────────────────────────────
+type MenuModalMode = { type: "add" } | { type: "edit"; menu: AssignedMenu };
+
+function MyTasksPanel({
+  assignedMenus,
+  completedItemIds,
+  onAssignedMenusChange,
+  orders,
+}: {
+  assignedMenus: AssignedMenu[];
+  completedItemIds: Set<number>;
+  onAssignedMenusChange: (menus: AssignedMenu[]) => void;
+  orders: Order[];
+}) {
+  const [menuModal, setMenuModal] = useState<MenuModalMode | null>(null);
+  const [menuInput, setMenuInput] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<AssignedMenu | null>(null);
+
+  // Items from active (NEW/COOKING) orders that match assigned menus
+  const assignedNames = useMemo(() => new Set(assignedMenus.map((m) => m.name.trim())), [assignedMenus]);
+
+  // Count remaining (not completed) items per assigned menu from active orders
+  const remainingCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    assignedMenus.forEach((m) => counts.set(m.name, 0));
+    orders
+      .filter((o) => o.status === "NEW" || o.status === "COOKING")
+      .forEach((order) => {
+        order.items.forEach((item) => {
+          const key = item.name.trim();
+          if (assignedNames.has(key) && !completedItemIds.has(item.id)) {
+            counts.set(key, (counts.get(key) ?? 0) + item.quantity);
+          }
+        });
+      });
+    return counts;
+  }, [assignedMenus, assignedNames, completedItemIds, orders]);
+
+  // History rows: all order items matching assigned menus, sorted newest first
+  type HistoryRow = {
+    orderNumber: string;
+    menuName: string;
+    quantity: number;
+    timestamp: string;
+    status: "진행중" | "완료";
+    itemId: number;
+  };
+
+  const historyRows = useMemo<HistoryRow[]>(() => {
+    const rows: HistoryRow[] = [];
+    orders
+      .filter((o) => o.status === "NEW" || o.status === "COOKING" || o.status === "DONE")
+      .forEach((order) => {
+        order.items.forEach((item) => {
+          if (!assignedNames.has(item.name.trim())) return;
+          rows.push({
+            orderNumber: order.order_number ?? String(order.id),
+            menuName: item.name,
+            quantity: item.quantity,
+            timestamp: order.ordered_at ?? order.created_at,
+            status: order.status === "DONE" || completedItemIds.has(item.id) ? "완료" : "진행중",
+            itemId: item.id,
+          });
+        });
+      });
+    // newest first
+    rows.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return rows;
+  }, [assignedNames, completedItemIds, orders]);
+
+  function openAdd() {
+    setMenuInput("");
+    setMenuModal({ type: "add" });
+  }
+
+  function openEdit(menu: AssignedMenu) {
+    setMenuInput(menu.name);
+    setMenuModal({ type: "edit", menu });
+  }
+
+  function saveMenu() {
+    const name = menuInput.trim();
+    if (!name) return;
+    if (menuModal?.type === "add") {
+      onAssignedMenusChange([...assignedMenus, { id: `menu-${Date.now()}`, name }]);
+    } else if (menuModal?.type === "edit") {
+      onAssignedMenusChange(assignedMenus.map((m) => (m.id === menuModal.menu.id ? { ...m, name } : m)));
+    }
+    setMenuModal(null);
+  }
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    onAssignedMenusChange(assignedMenus.filter((m) => m.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  }
+
+  function formatHistoryTime(timestamp: string) {
+    const d = parseApiTimestamp(timestamp);
+    if (Number.isNaN(d.getTime())) return "-";
+    return d.toLocaleString("ko-KR", {
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  return (
+    <section className="kds-panel" aria-label="내 업무">
+      {/* Header */}
+      <div className="kds-my-tasks-head">
+        <div className="kds-panel-head">
+          <h2 className="kds-panel-title">내 업무</h2>
+          <p className="kds-panel-subtitle">담당 메뉴의 진행 중 수량</p>
+        </div>
+        <button className="kds-add-menu-btn" onClick={openAdd} type="button">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+            <line x1="6.5" y1="1" x2="6.5" y2="12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <line x1="1" y1="6.5" x2="12" y2="6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+          메뉴 추가
+        </button>
+      </div>
+
+      {/* Menu summary cards */}
+      {assignedMenus.length === 0 ? (
+        <div className="kds-my-tasks-empty">
+          <p>담당 메뉴가 없습니다. [메뉴 추가]를 눌러 추가하세요.</p>
+        </div>
+      ) : (
+        <div className="kds-menu-cards">
+          {assignedMenus.map((menu) => {
+            const count = remainingCounts.get(menu.name) ?? 0;
+            return (
+              <div className={`kds-menu-card${count === 0 ? " inactive" : ""}`} key={menu.id}>
+                <div className="kds-menu-card-actions">
+                  <button
+                    className="kds-menu-card-btn"
+                    onClick={() => openEdit(menu)}
+                    title="수정"
+                    type="button"
+                    aria-label={`${menu.name} 수정`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                      <path d="M2 9.5l6.5-6.5 2 2L4 11.5H2V9.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <button
+                    className="kds-menu-card-btn danger"
+                    onClick={() => setDeleteTarget(menu)}
+                    title="삭제"
+                    type="button"
+                    aria-label={`${menu.name} 삭제`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                      <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </div>
+                <span className="kds-menu-card-name">{menu.name}</span>
+                <span className="kds-menu-card-count">{count}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* History table */}
+      <div className="kds-history-section">
+        <h3 className="kds-stats-section-title">업무 히스토리</h3>
+        {historyRows.length === 0 ? (
+          <p className="kds-stats-empty">관련 주문 내역이 없습니다.</p>
+        ) : (
+          <div className="kds-history-table-wrap">
+            <table className="kds-history-table">
+              <thead>
+                <tr>
+                  <th>주문번호</th>
+                  <th>메뉴</th>
+                  <th>갯수</th>
+                  <th>시각</th>
+                  <th>상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyRows.map((row, idx) => (
+                  <tr key={`${row.orderNumber}-${row.itemId}-${idx}`} className={row.status === "완료" ? "row-done" : ""}>
+                    <td className="cell-order-num">{row.orderNumber}</td>
+                    <td>{row.menuName}</td>
+                    <td className="cell-qty">{row.quantity}</td>
+                    <td className="cell-time">{formatHistoryTime(row.timestamp)}</td>
+                    <td>
+                      <span className={`kds-status-chip ${row.status === "완료" ? "done" : "active"}`}>
+                        {row.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Add / Edit menu modal */}
+      {menuModal ? (
+        <div className="kds-modal-backdrop" onClick={() => setMenuModal(null)}>
+          <div
+            className="kds-modal kds-modal--sm"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={menuModal.type === "add" ? "담당 메뉴 추가" : "담당 메뉴 수정"}
+          >
+            <div className="kds-modal-head">
+              <h2 className="kds-modal-title">{menuModal.type === "add" ? "담당 메뉴 추가" : "담당 메뉴 수정"}</h2>
+              <button className="kds-modal-close" onClick={() => setMenuModal(null)} type="button" aria-label="닫기">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <line x1="2" y1="2" x2="12" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  <line x1="12" y1="2" x2="2" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="kds-modal-body">
+              <div className="kds-settings-field">
+                <label className="kds-settings-label" htmlFor="menu-name-input">메뉴명</label>
+                <input
+                  id="menu-name-input"
+                  type="text"
+                  value={menuInput}
+                  onChange={(e) => setMenuInput(e.target.value)}
+                  placeholder="예: 짜장면"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter") saveMenu(); }}
+                />
+              </div>
+            </div>
+            <div className="kds-modal-foot">
+              <button className="kds-modal-btn secondary" onClick={() => setMenuModal(null)} type="button">취소</button>
+              <button className="kds-modal-btn primary" disabled={!menuInput.trim()} onClick={saveMenu} type="button">저장</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Delete confirm modal */}
+      {deleteTarget ? (
+        <div className="kds-modal-backdrop" onClick={() => setDeleteTarget(null)}>
+          <div
+            className="kds-modal kds-modal--sm"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="kds-modal-head">
+              <h2 className="kds-modal-title">담당 메뉴 삭제</h2>
+            </div>
+            <div className="kds-modal-body">
+              <p className="kds-modal-desc">
+                <strong>{deleteTarget.name}</strong> 담당 메뉴를 삭제하시겠습니까?
+              </p>
+            </div>
+            <div className="kds-modal-foot">
+              <button className="kds-modal-btn secondary" onClick={() => setDeleteTarget(null)} type="button">아니오</button>
+              <button className="kds-modal-btn danger" onClick={confirmDelete} type="button">예</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
