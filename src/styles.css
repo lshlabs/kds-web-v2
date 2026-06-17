@@ -2158,6 +2158,272 @@ button:not(:disabled):hover {
 }
 
 /* ─────────────────────────────────────────────
+   Auth tab panel fade (login ↔ register)
+───────────────────────────────────────────── */
+.auth-tab-panels {
+  position: relative;
+  min-height: 280px;
+}
+
+.auth-tab-panel {
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  transition: opacity 0.22s ease;
+  width: 100%;
+}
+
+.auth-tab-panel--visible {
+  opacity: 1;
+  pointer-events: auto;
+  position: relative;
+}
+
+/* ─────────────────────────────────────────────
+   Staff Panel
+───────────────────────────────────────────── */
+.kds-staff-list {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.kds-staff-row {
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  transition: background 0.12s;
+}
+
+.kds-staff-row:last-child {
+  border-bottom: none;
+}
+
+.kds-staff-row:hover {
+  background: var(--color-surface-2);
+}
+
+.kds-staff-row.inactive {
+  opacity: 0.5;
+}
+
+.kds-staff-avatar {
+  align-items: center;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.kds-staff-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.kds-staff-name {
+  align-items: center;
+  color: var(--color-text);
+  display: flex;
+  font-size: 14px;
+  font-weight: 600;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.kds-staff-email {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kds-staff-role-badge {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+}
+
+.kds-staff-role-badge.manager {
+  background: rgba(249, 115, 22, 0.08);
+  border-color: var(--color-accent-border);
+  color: var(--color-accent);
+}
+
+.kds-staff-inactive-badge {
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 999px;
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+}
+
+.kds-staff-pin-area {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.kds-staff-pin-reveal {
+  align-items: center;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.kds-staff-pin-label {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.kds-staff-pin-value {
+  color: var(--color-accent);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.kds-staff-pin-hide {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  display: flex;
+  height: 20px;
+  justify-content: center;
+  padding: 0;
+  width: 20px;
+}
+
+.kds-staff-pin-hide:not(:disabled):hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.kds-staff-actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.kds-staff-action-btn {
+  align-items: center;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  height: 30px;
+  justify-content: center;
+  min-width: 30px;
+  padding: 0 8px;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.kds-staff-action-btn:not(:disabled):hover {
+  background: var(--color-border);
+  border-color: var(--color-border-hover);
+  color: var(--color-text);
+}
+
+.kds-staff-action-btn.danger:not(:disabled):hover {
+  background: var(--color-error-bg);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: var(--color-error-text);
+}
+
+.kds-staff-action-btn.restore:not(:disabled):hover {
+  background: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.3);
+  color: #16a34a;
+}
+
+/* ─────────────────────────────────────────────
+   UI Polishing
+───────────────────────────────────────────── */
+
+/* Tighten topbar tab gap on desktop */
+.kds-topbar-tabs {
+  gap: 0;
+}
+
+.kds-tab {
+  padding: 0 14px;
+}
+
+/* Item options — slightly tighter indent */
+.kds-item-options li {
+  padding-left: 14px;
+}
+
+/* Card done: tinted background for visibility */
+.kds-card.done .kds-items {
+  background: var(--color-surface);
+}
+
+/* Completed menu item contrast improvement */
+.kds-item.item-done {
+  background: rgba(22, 163, 74, 0.06);
+}
+
+/* Inner card items padding tweak for readability */
+.kds-items {
+  gap: 0;
+  padding: 6px 12px 10px;
+}
+
+.kds-item {
+  padding: 8px 6px;
+}
+
+/* My tasks card gap */
+.kds-menu-cards {
+  gap: 10px;
+}
+
+/* History table row hover */
+.kds-history-table tbody tr:hover td {
+  background: var(--color-surface-2);
+}
+
+/* Modal desc line-height */
+.kds-modal-desc {
+  line-height: 1.65;
+}
+
+/* ─────────────────────────────────────────────
    Responsive
 ───────────────────────────────────────────── */
 @media (max-width: 900px) {

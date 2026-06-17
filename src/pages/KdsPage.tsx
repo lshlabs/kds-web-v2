@@ -7,7 +7,17 @@ import type { AnalysisAction, AuthSession, Order, OrderAIAnalysis, OrderStatus }
 const NEW_ORDER_GLOW_MS = 4000;
 
 const POLLING_INTERVAL_MS = 3000;
-type BoardTab = "RECEIVED" | "DONE" | "MY_TASKS" | "STATS" | "SETTINGS";
+type BoardTab = "RECEIVED" | "DONE" | "MY_TASKS" | "STATS" | "SETTINGS" | "STAFF";
+
+type StaffMember = {
+  id: string;
+  name: string;
+  email: string;
+  pin: string;
+  role: "staff" | "manager";
+  active: boolean;
+  createdAt: string;
+};
 
 type AssignedMenu = {
   id: string; // client-side uuid
@@ -253,6 +263,7 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
     }
   }
 
+  const isManager = session.user.role === "STORE_OWNER" || session.user.role === "ADMIN";
   const activeOrders = activeTab === "RECEIVED" ? receivedOrders : doneOrders;
   const initials = (session.user.name ?? session.store.storeName ?? "?").slice(0, 2).toUpperCase();
 
@@ -378,34 +389,55 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
             )}
           </button>
 
-          <button
-            className={`kds-sidebar-item${activeTab === "MY_TASKS" ? " active" : ""}`}
-            onClick={() => { setActiveTab("MY_TASKS"); setSidebarOpen(false); }}
-            type="button"
-            title="내 업무"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <circle cx="7" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M2 15c0-2.76 2.24-5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M11 11l1.5 1.5L15 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="13" cy="13" r="3.5" stroke="currentColor" strokeWidth="1.3" />
-            </svg>
-            {sidebarOpen && <span>내 업무</span>}
-          </button>
+          {!isManager ? (
+            <button
+              className={`kds-sidebar-item${activeTab === "MY_TASKS" ? " active" : ""}`}
+              onClick={() => { setActiveTab("MY_TASKS"); setSidebarOpen(false); }}
+              type="button"
+              title="내 업무"
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <circle cx="7" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M2 15c0-2.76 2.24-5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M11 11l1.5 1.5L15 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="13" cy="13" r="3.5" stroke="currentColor" strokeWidth="1.3" />
+              </svg>
+              {sidebarOpen && <span>내 업무</span>}
+            </button>
+          ) : null}
 
-          <button
-            className={`kds-sidebar-item${activeTab === "STATS" ? " active" : ""}`}
-            onClick={() => { setActiveTab("STATS"); setSidebarOpen(false); }}
-            type="button"
-            title="통계"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <rect x="3" y="10" width="3" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-              <rect x="7.5" y="6" width="3" height="9" rx="1" stroke="currentColor" strokeWidth="1.5" />
-              <rect x="12" y="3" width="3" height="12" rx="1" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-            {sidebarOpen && <span>통계</span>}
-          </button>
+          {isManager ? (
+            <button
+              className={`kds-sidebar-item${activeTab === "STAFF" ? " active" : ""}`}
+              onClick={() => { setActiveTab("STAFF"); setSidebarOpen(false); }}
+              type="button"
+              title="직원"
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <circle cx="6.5" cy="5.5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M1 15c0-3.04 2.46-5.5 5.5-5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <circle cx="13" cy="5.5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M17 15c0-3.04-2.46-5.5-5.5-5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              {sidebarOpen && <span>직원</span>}
+            </button>
+          ) : null}
+
+          {isManager ? (
+            <button
+              className={`kds-sidebar-item${activeTab === "STATS" ? " active" : ""}`}
+              onClick={() => { setActiveTab("STATS"); setSidebarOpen(false); }}
+              type="button"
+              title="통계"
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <rect x="3" y="10" width="3" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                <rect x="7.5" y="6" width="3" height="9" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                <rect x="12" y="3" width="3" height="12" rx="1" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+              {sidebarOpen && <span>통계</span>}
+            </button>
+          ) : null}
 
           <button
             className={`kds-sidebar-item${activeTab === "SETTINGS" ? " active" : ""}`}
@@ -495,24 +527,39 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
               완료
               <span className="kds-tab-count">{doneOrders.length}</span>
             </button>
-            <button
-              aria-selected={activeTab === "MY_TASKS"}
-              className={`kds-tab${activeTab === "MY_TASKS" ? " active" : ""}`}
-              onClick={() => setActiveTab("MY_TASKS")}
-              role="tab"
-              type="button"
-            >
-              내 업무
-            </button>
-            <button
-              aria-selected={activeTab === "STATS"}
-              className={`kds-tab${activeTab === "STATS" ? " active" : ""}`}
-              onClick={() => setActiveTab("STATS")}
-              role="tab"
-              type="button"
-            >
-              통계
-            </button>
+            {!isManager ? (
+              <button
+                aria-selected={activeTab === "MY_TASKS"}
+                className={`kds-tab${activeTab === "MY_TASKS" ? " active" : ""}`}
+                onClick={() => setActiveTab("MY_TASKS")}
+                role="tab"
+                type="button"
+              >
+                내 업무
+              </button>
+            ) : null}
+            {isManager ? (
+              <button
+                aria-selected={activeTab === "STAFF"}
+                className={`kds-tab${activeTab === "STAFF" ? " active" : ""}`}
+                onClick={() => setActiveTab("STAFF")}
+                role="tab"
+                type="button"
+              >
+                직원
+              </button>
+            ) : null}
+            {isManager ? (
+              <button
+                aria-selected={activeTab === "STATS"}
+                className={`kds-tab${activeTab === "STATS" ? " active" : ""}`}
+                onClick={() => setActiveTab("STATS")}
+                role="tab"
+                type="button"
+              >
+                통계
+              </button>
+            ) : null}
             <button
               aria-selected={activeTab === "SETTINGS"}
               className={`kds-tab${activeTab === "SETTINGS" ? " active" : ""}`}
@@ -571,6 +618,8 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
             onAssignedMenusChange={setAssignedMenus}
             orders={orders}
           />
+        ) : activeTab === "STAFF" ? (
+          <StaffPanel />
         ) : activeTab === "STATS" ? (
           <StatsPanel orders={orders} />
         ) : activeTab === "SETTINGS" ? (
@@ -1057,6 +1106,289 @@ function RequestPanel({
       ) : null}
       {hasRaw ? <p className="kds-request-text">{rawText}</p> : null}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Staff Panel
+// ─────────────────────────────────────────────
+const DEMO_STAFF: StaffMember[] = [
+  { id: "s1", name: "김민준", email: "minjun@example.com", pin: "1234", role: "staff", active: true, createdAt: "2025-01-10T09:00:00" },
+  { id: "s2", name: "이서연", email: "seoyeon@example.com", pin: "5678", role: "manager", active: true, createdAt: "2025-01-12T10:30:00" },
+  { id: "s3", name: "박지호", email: "jiho@example.com", pin: "9012", role: "staff", active: false, createdAt: "2025-02-01T14:00:00" },
+];
+
+type StaffModalMode =
+  | { type: "add" }
+  | { type: "edit"; member: StaffMember }
+  | { type: "pin"; member: StaffMember }
+  | { type: "deactivate"; member: StaffMember };
+
+function StaffPanel() {
+  const [staffList, setStaffList] = useState<StaffMember[]>(DEMO_STAFF);
+  const [modal, setModal] = useState<StaffModalMode | null>(null);
+  const [form, setForm] = useState({ name: "", email: "", role: "staff" as StaffMember["role"] });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pinVisible, setPinVisible] = useState<string | null>(null);
+
+  function openAdd() {
+    setForm({ name: "", email: "", role: "staff" });
+    setFormError(null);
+    setModal({ type: "add" });
+  }
+
+  function openEdit(member: StaffMember) {
+    setForm({ name: member.name, email: member.email, role: member.role });
+    setFormError(null);
+    setModal({ type: "edit", member });
+  }
+
+  function saveStaff() {
+    if (!form.name.trim()) { setFormError("이름을 입력하세요."); return; }
+    if (!form.email.trim() || !form.email.includes("@")) { setFormError("올바른 이메일을 입력하세요."); return; }
+    setFormError(null);
+
+    if (modal?.type === "add") {
+      const pin = String(Math.floor(1000 + Math.random() * 9000));
+      const newMember: StaffMember = {
+        id: `s${Date.now()}`,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        pin,
+        role: form.role,
+        active: true,
+        createdAt: new Date().toISOString(),
+      };
+      setStaffList((prev) => [...prev, newMember]);
+      setPinVisible(newMember.id);
+    } else if (modal?.type === "edit") {
+      setStaffList((prev) =>
+        prev.map((m) => m.id === modal.member.id ? { ...m, name: form.name.trim(), email: form.email.trim(), role: form.role } : m),
+      );
+    }
+    setModal(null);
+  }
+
+  function reissuePin(member: StaffMember) {
+    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    setStaffList((prev) => prev.map((m) => m.id === member.id ? { ...m, pin } : m));
+    setPinVisible(member.id);
+    setModal(null);
+  }
+
+  function toggleActive(member: StaffMember) {
+    setStaffList((prev) => prev.map((m) => m.id === member.id ? { ...m, active: !m.active } : m));
+    setModal(null);
+  }
+
+  const activeCount = staffList.filter((m) => m.active).length;
+
+  return (
+    <section className="kds-panel" aria-label="직원 관리">
+      <div className="kds-my-tasks-head">
+        <div className="kds-panel-head">
+          <h2 className="kds-panel-title">직원 관리</h2>
+          <p className="kds-panel-subtitle">총 {staffList.length}명 · 활성 {activeCount}명</p>
+        </div>
+        <button className="kds-add-menu-btn" onClick={openAdd} type="button">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+            <line x1="6.5" y1="1" x2="6.5" y2="12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <line x1="1" y1="6.5" x2="12" y2="6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+          직원 추가
+        </button>
+      </div>
+
+      {/* Staff list */}
+      <div className="kds-staff-list">
+        {staffList.map((member) => (
+          <div className={`kds-staff-row${!member.active ? " inactive" : ""}`} key={member.id}>
+            <div className="kds-staff-avatar" aria-hidden="true">
+              {member.name.slice(0, 1)}
+            </div>
+            <div className="kds-staff-info">
+              <div className="kds-staff-name">
+                {member.name}
+                <span className={`kds-staff-role-badge${member.role === "manager" ? " manager" : ""}`}>
+                  {member.role === "manager" ? "매니저" : "직원"}
+                </span>
+                {!member.active ? <span className="kds-staff-inactive-badge">비활성</span> : null}
+              </div>
+              <div className="kds-staff-email">{member.email}</div>
+            </div>
+            <div className="kds-staff-pin-area">
+              {pinVisible === member.id ? (
+                <div className="kds-staff-pin-reveal">
+                  <span className="kds-staff-pin-label">PIN</span>
+                  <span className="kds-staff-pin-value">{member.pin}</span>
+                  <button
+                    className="kds-staff-pin-hide"
+                    onClick={() => setPinVisible(null)}
+                    type="button"
+                    aria-label="PIN 숨기기"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                      <line x1="2" y1="2" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="12" y1="2" x2="2" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <div className="kds-staff-actions">
+              <button
+                className="kds-staff-action-btn"
+                onClick={() => setModal({ type: "pin", member })}
+                title="PIN 발급"
+                type="button"
+              >
+                PIN
+              </button>
+              <button
+                className="kds-staff-action-btn"
+                onClick={() => openEdit(member)}
+                title="수정"
+                type="button"
+              >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                  <path d="M2 10l7-7 2 2-7 7H2v-2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button
+                className={`kds-staff-action-btn${member.active ? " danger" : " restore"}`}
+                onClick={() => setModal({ type: "deactivate", member })}
+                title={member.active ? "비활성화" : "활성화"}
+                type="button"
+              >
+                {member.active ? (
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                    <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.3" />
+                    <line x1="4" y1="6.5" x2="9" y2="6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                    <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.3" />
+                    <path d="M4.5 6.5l2 2 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add / Edit modal */}
+      {(modal?.type === "add" || modal?.type === "edit") ? (
+        <div className="kds-modal-backdrop" onClick={() => setModal(null)}>
+          <div
+            className="kds-modal kds-modal--sm"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={modal.type === "add" ? "직원 추가" : "직원 정보 수정"}
+          >
+            <div className="kds-modal-head">
+              <h2 className="kds-modal-title">{modal.type === "add" ? "직원 추가" : "직원 정보 수정"}</h2>
+              <button className="kds-modal-close" onClick={() => setModal(null)} type="button" aria-label="닫기">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <line x1="2" y1="2" x2="12" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  <line x1="12" y1="2" x2="2" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="kds-modal-body">
+              <div className="kds-settings-field">
+                <label className="kds-settings-label" htmlFor="staff-name">이름</label>
+                <input id="staff-name" type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="직원 이름" autoFocus />
+              </div>
+              <div className="kds-settings-field">
+                <label className="kds-settings-label" htmlFor="staff-email">이메일</label>
+                <input id="staff-email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="이메일 주소" />
+              </div>
+              <div className="kds-settings-field">
+                <label className="kds-settings-label">역할</label>
+                <div className="kds-segmented">
+                  {([["staff", "직원"], ["manager", "매니저"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      className={`kds-segmented-btn${form.role === val ? " active" : ""}`}
+                      onClick={() => setForm((f) => ({ ...f, role: val }))}
+                      type="button"
+                    >{label}</button>
+                  ))}
+                </div>
+              </div>
+              {modal.type === "add" ? (
+                <p className="kds-settings-hint">추가 후 4자리 PIN이 자동 발급됩니다.</p>
+              ) : null}
+              {formError ? <p className="kds-settings-error">{formError}</p> : null}
+            </div>
+            <div className="kds-modal-foot">
+              <button className="kds-modal-btn secondary" onClick={() => setModal(null)} type="button">취소</button>
+              <button className="kds-modal-btn primary" onClick={saveStaff} type="button">저장</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* PIN reissue modal */}
+      {modal?.type === "pin" ? (
+        <div className="kds-modal-backdrop" onClick={() => setModal(null)}>
+          <div
+            className="kds-modal kds-modal--sm"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="kds-modal-head">
+              <h2 className="kds-modal-title">PIN 재발급</h2>
+            </div>
+            <div className="kds-modal-body">
+              <p className="kds-modal-desc">
+                <strong>{modal.member.name}</strong>의 PIN을 새로 발급하시겠습니까?<br />
+                기존 PIN은 즉시 사용 불가 처리됩니다.
+              </p>
+            </div>
+            <div className="kds-modal-foot">
+              <button className="kds-modal-btn secondary" onClick={() => setModal(null)} type="button">취소</button>
+              <button className="kds-modal-btn primary" onClick={() => reissuePin(modal.member)} type="button">발급</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Deactivate / Activate modal */}
+      {modal?.type === "deactivate" ? (
+        <div className="kds-modal-backdrop" onClick={() => setModal(null)}>
+          <div
+            className="kds-modal kds-modal--sm"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="kds-modal-head">
+              <h2 className="kds-modal-title">{modal.member.active ? "직원 비활성화" : "직원 활성화"}</h2>
+            </div>
+            <div className="kds-modal-body">
+              <p className="kds-modal-desc">
+                <strong>{modal.member.name}</strong>을(를) {modal.member.active ? "비활성화" : "활성화"}하시겠습니까?
+                {modal.member.active ? " 비활성화된 직원은 로그인할 수 없습니다." : ""}
+              </p>
+            </div>
+            <div className="kds-modal-foot">
+              <button className="kds-modal-btn secondary" onClick={() => setModal(null)} type="button">취소</button>
+              <button
+                className={`kds-modal-btn${modal.member.active ? " danger" : " primary"}`}
+                onClick={() => toggleActive(modal.member)}
+                type="button"
+              >
+                {modal.member.active ? "비활성화" : "활성화"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
