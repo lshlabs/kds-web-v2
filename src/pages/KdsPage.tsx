@@ -7,7 +7,23 @@ import type { AnalysisAction, AuthSession, Order, OrderAIAnalysis, OrderStatus }
 const NEW_ORDER_GLOW_MS = 4000;
 
 const POLLING_INTERVAL_MS = 3000;
-type BoardTab = "RECEIVED" | "DONE";
+type BoardTab = "RECEIVED" | "DONE" | "STATS" | "SETTINGS";
+
+type SoundOption = "none" | "bell" | "chime" | "beep";
+
+type BreaktimeConfig = {
+  enabled: boolean;
+  startHour: number;
+  startMinute: number;
+  durationMinutes: number;
+};
+
+type SettingsState = {
+  notificationsEnabled: boolean;
+  sound: SoundOption;
+  breaktime: BreaktimeConfig;
+  autoAccept: boolean;
+};
 
 type KdsPageProps = {
   session: AuthSession;
@@ -35,6 +51,20 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   const [detailOrderId, setDetailOrderId] = useState<number | null>(null);
   const [removeOrderId, setRemoveOrderId] = useState<number | null>(null);
   const [clearDoneConfirm, setClearDoneConfirm] = useState(false);
+  // Settings (local state only — no backend yet)
+  const [settings, setSettings] = useState<SettingsState>({
+    notificationsEnabled: true,
+    sound: "bell",
+    breaktime: { enabled: false, startHour: 15, startMinute: 0, durationMinutes: 60 },
+    autoAccept: false,
+  });
+  // Change-password modal
+  const [pwModal, setPwModal] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSubmitting, setPwSubmitting] = useState(false);
   const knownOrderIdsRef = useRef<Set<number>>(new Set());
   const accountRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -192,6 +222,25 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
     }
   }
 
+  function updateSettings(partial: Partial<SettingsState>) {
+    setSettings((prev) => ({ ...prev, ...partial }));
+  }
+
+  async function handleChangePassword() {
+    setPwError(null);
+    if (!pwCurrent.trim()) { setPwError("현재 비밀번호를 입력하세요."); return; }
+    if (pwNew.length < 8) { setPwError("새 비밀번호는 8자 이상이어야 합니다."); return; }
+    if (pwNew !== pwConfirm) { setPwError("새 비밀번호가 일치하지 않습니다."); return; }
+    setPwSubmitting(true);
+    try {
+      // API 미구현 — 성공으로 처리 후 로그아웃
+      await new Promise((resolve) => window.setTimeout(resolve, 600));
+      await onLogout();
+    } finally {
+      setPwSubmitting(false);
+    }
+  }
+
   const activeOrders = activeTab === "RECEIVED" ? receivedOrders : doneOrders;
   const initials = (session.user.name ?? session.store.storeName ?? "?").slice(0, 2).toUpperCase();
 
@@ -316,6 +365,33 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
               </span>
             )}
           </button>
+
+          <button
+            className={`kds-sidebar-item${activeTab === "STATS" ? " active" : ""}`}
+            onClick={() => { setActiveTab("STATS"); setSidebarOpen(false); }}
+            type="button"
+            title="통계"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <rect x="3" y="10" width="3" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+              <rect x="7.5" y="6" width="3" height="9" rx="1" stroke="currentColor" strokeWidth="1.5" />
+              <rect x="12" y="3" width="3" height="12" rx="1" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+            {sidebarOpen && <span>통계</span>}
+          </button>
+
+          <button
+            className={`kds-sidebar-item${activeTab === "SETTINGS" ? " active" : ""}`}
+            onClick={() => { setActiveTab("SETTINGS"); setSidebarOpen(false); }}
+            type="button"
+            title="설정"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M9 2v1.5M9 14.5V16M2 9h1.5M14.5 9H16M3.93 3.93l1.06 1.06M13.01 13.01l1.06 1.06M3.93 14.07l1.06-1.06M13.01 4.99l1.06-1.06" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            {sidebarOpen && <span>설정</span>}
+          </button>
         </div>
 
         <div className="kds-sidebar-account" ref={accountRef}>
@@ -392,6 +468,24 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
               완료
               <span className="kds-tab-count">{doneOrders.length}</span>
             </button>
+            <button
+              aria-selected={activeTab === "STATS"}
+              className={`kds-tab${activeTab === "STATS" ? " active" : ""}`}
+              onClick={() => setActiveTab("STATS")}
+              role="tab"
+              type="button"
+            >
+              통계
+            </button>
+            <button
+              aria-selected={activeTab === "SETTINGS"}
+              className={`kds-tab${activeTab === "SETTINGS" ? " active" : ""}`}
+              onClick={() => setActiveTab("SETTINGS")}
+              role="tab"
+              type="button"
+            >
+              설정
+            </button>
           </div>
 
           <div className="kds-topbar-right">
@@ -434,27 +528,37 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
           <div className="banner">취소 주문 {counts.CANCELLED}건은 보드에서 제외하고 집계로만 관리합니다.</div>
         ) : null}
 
-        <section className="kds-board" aria-label="주문 보드">
-          {activeOrders.length === 0 ? (
-            <div className="kds-empty">
-              {activeTab === "RECEIVED" ? "접수된 주문이 없습니다" : "완료된 주문이 없습니다"}
-            </div>
-          ) : (
-            <div className="kds-lane">
-              {activeOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  isNew={newOrderIds.has(order.id)}
-                  now={now}
-                  onContextMenu={(orderId, x, y) => setContextMenu({ orderId, x, y })}
-                  onUpdateStatus={updateOrderStatus}
-                  order={order}
-                  updating={updatingOrderId === order.id}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+        {activeTab === "STATS" ? (
+          <StatsPanel orders={orders} />
+        ) : activeTab === "SETTINGS" ? (
+          <SettingsPanel
+            settings={settings}
+            onUpdate={updateSettings}
+            onChangePasswordClick={() => { setPwModal(true); setPwError(null); setPwCurrent(""); setPwNew(""); setPwConfirm(""); }}
+          />
+        ) : (
+          <section className="kds-board" aria-label="주문 보드">
+            {activeOrders.length === 0 ? (
+              <div className="kds-empty">
+                {activeTab === "RECEIVED" ? "접수된 주문이 없습니다" : "완료된 주문이 없습니다"}
+              </div>
+            ) : (
+              <div className="kds-lane">
+                {activeOrders.map((order) => (
+                  <OrderCard
+                    key={order.id}
+                    isNew={newOrderIds.has(order.id)}
+                    now={now}
+                    onContextMenu={(orderId, x, y) => setContextMenu({ orderId, x, y })}
+                    onUpdateStatus={updateOrderStatus}
+                    order={order}
+                    updating={updatingOrderId === order.id}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {/* Context menu */}
@@ -639,6 +743,45 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
                 type="button"
               >
                 예
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Change password modal */}
+      {pwModal ? (
+        <div className="kds-modal-backdrop" onClick={() => setPwModal(false)}>
+          <div className="kds-modal kds-modal--sm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="비밀번호 변경">
+            <div className="kds-modal-head">
+              <h2 className="kds-modal-title">비밀번호 변경</h2>
+              <button className="kds-modal-close" onClick={() => setPwModal(false)} type="button" aria-label="닫기">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <line x1="2" y1="2" x2="12" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  <line x1="12" y1="2" x2="2" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="kds-modal-body">
+              <div className="kds-settings-field">
+                <label className="kds-settings-label" htmlFor="pw-current">현재 비밀번호</label>
+                <input id="pw-current" type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} placeholder="현재 비밀번호" autoComplete="current-password" />
+              </div>
+              <div className="kds-settings-field">
+                <label className="kds-settings-label" htmlFor="pw-new">새 비밀번호</label>
+                <input id="pw-new" type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} placeholder="8자 이상" autoComplete="new-password" />
+              </div>
+              <div className="kds-settings-field">
+                <label className="kds-settings-label" htmlFor="pw-confirm">새 비밀번호 확인</label>
+                <input id="pw-confirm" type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} placeholder="비밀번호 재입력" autoComplete="new-password" />
+              </div>
+              {pwError ? <p className="kds-settings-error">{pwError}</p> : null}
+              <p className="kds-settings-hint">변경 성공 시 현재 세션이 로그아웃됩니다.</p>
+            </div>
+            <div className="kds-modal-foot">
+              <button className="kds-modal-btn secondary" onClick={() => setPwModal(false)} type="button">취소</button>
+              <button className="kds-modal-btn primary" disabled={pwSubmitting} onClick={() => void handleChangePassword()} type="button">
+                {pwSubmitting ? "변경중…" : "변경"}
               </button>
             </div>
           </div>
@@ -874,6 +1017,243 @@ function RequestPanel({
       ) : null}
       {hasRaw ? <p className="kds-request-text">{rawText}</p> : null}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Stats Panel
+// ─────────────────────────────────────────────
+function StatsPanel({ orders }: { orders: Order[] }) {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  const todayOrders = orders.filter((o) => {
+    const ts = o.ordered_at ?? o.created_at;
+    return ts.startsWith(todayStr);
+  });
+
+  const doneOrders = todayOrders.filter((o) => o.status === "DONE");
+  const totalRevenue = todayOrders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + (i.total_price ?? 0), 0), 0);
+
+  // Menu count map
+  const menuMap = new Map<string, number>();
+  todayOrders.forEach((o) => {
+    o.items.forEach((item) => {
+      menuMap.set(item.name, (menuMap.get(item.name) ?? 0) + item.quantity);
+    });
+  });
+  const sortedMenus = Array.from(menuMap.entries()).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <section className="kds-panel" aria-label="통계">
+      <div className="kds-panel-head">
+        <h2 className="kds-panel-title">오늘 통계</h2>
+        <p className="kds-panel-subtitle">{todayStr}</p>
+      </div>
+
+      <div className="kds-stats-summary">
+        <div className="kds-stat-card">
+          <span className="kds-stat-label">총 주문</span>
+          <span className="kds-stat-value">{todayOrders.length}<small>건</small></span>
+        </div>
+        <div className="kds-stat-card">
+          <span className="kds-stat-label">완료</span>
+          <span className="kds-stat-value accent">{doneOrders.length}<small>건</small></span>
+        </div>
+        <div className="kds-stat-card">
+          <span className="kds-stat-label">총 매출</span>
+          <span className="kds-stat-value">{totalRevenue > 0 ? totalRevenue.toLocaleString() : "-"}<small>{totalRevenue > 0 ? "원" : ""}</small></span>
+        </div>
+      </div>
+
+      <div className="kds-stats-section">
+        <h3 className="kds-stats-section-title">메뉴별 주문 수</h3>
+        {sortedMenus.length === 0 ? (
+          <p className="kds-stats-empty">오늘 주문된 메뉴가 없습니다.</p>
+        ) : (
+          <div className="kds-menu-stats">
+            {sortedMenus.map(([name, count]) => {
+              const max = sortedMenus[0][1];
+              return (
+                <div className="kds-menu-stat-row" key={name}>
+                  <span className="kds-menu-stat-name">{name}</span>
+                  <div className="kds-menu-stat-bar-wrap">
+                    <div className="kds-menu-stat-bar" style={{ width: `${Math.round((count / max) * 100)}%` }} />
+                  </div>
+                  <span className="kds-menu-stat-count">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Settings Panel
+// ─────────────────────────────────────────────
+const SOUND_OPTIONS: { value: SoundOption; label: string }[] = [
+  { value: "none", label: "없음" },
+  { value: "bell", label: "벨" },
+  { value: "chime", label: "차임" },
+  { value: "beep", label: "비프" },
+];
+
+function SettingsPanel({
+  settings,
+  onUpdate,
+  onChangePasswordClick,
+}: {
+  settings: SettingsState;
+  onUpdate: (partial: Partial<SettingsState>) => void;
+  onChangePasswordClick: () => void;
+}) {
+  function padHHMM(h: number, m: number) {
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+
+  function parseHHMM(value: string) {
+    const [h, m] = value.split(":").map(Number);
+    return { hour: Number.isNaN(h) ? 0 : h, minute: Number.isNaN(m) ? 0 : m };
+  }
+
+  return (
+    <section className="kds-panel" aria-label="설정">
+      <div className="kds-panel-head">
+        <h2 className="kds-panel-title">설정</h2>
+      </div>
+
+      <div className="kds-settings-groups">
+        {/* 알림 */}
+        <div className="kds-settings-group">
+          <h3 className="kds-settings-group-title">알림</h3>
+
+          <div className="kds-settings-row">
+            <div className="kds-settings-row-info">
+              <span className="kds-settings-row-label">알림</span>
+              <span className="kds-settings-row-desc">주문 도착 시 알림을 받습니다</span>
+            </div>
+            <button
+              className={`kds-toggle${settings.notificationsEnabled ? " on" : ""}`}
+              onClick={() => onUpdate({ notificationsEnabled: !settings.notificationsEnabled })}
+              type="button"
+              role="switch"
+              aria-checked={settings.notificationsEnabled}
+            >
+              <span className="kds-toggle-knob" />
+            </button>
+          </div>
+
+          <div className="kds-settings-row">
+            <div className="kds-settings-row-info">
+              <span className="kds-settings-row-label">알림 사운드</span>
+              <span className="kds-settings-row-desc">주문 도착 시 재생할 사운드</span>
+            </div>
+            <div className="kds-segmented">
+              {SOUND_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  className={`kds-segmented-btn${settings.sound === opt.value ? " active" : ""}`}
+                  disabled={!settings.notificationsEnabled}
+                  onClick={() => onUpdate({ sound: opt.value })}
+                  type="button"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 브레이크타임 */}
+        <div className="kds-settings-group">
+          <h3 className="kds-settings-group-title">브레이크타임</h3>
+
+          <div className="kds-settings-row">
+            <div className="kds-settings-row-info">
+              <span className="kds-settings-row-label">브레이크타임 사용</span>
+              <span className="kds-settings-row-desc">설정 시간에 자동으로 일시중지</span>
+            </div>
+            <button
+              className={`kds-toggle${settings.breaktime.enabled ? " on" : ""}`}
+              onClick={() => onUpdate({ breaktime: { ...settings.breaktime, enabled: !settings.breaktime.enabled } })}
+              type="button"
+              role="switch"
+              aria-checked={settings.breaktime.enabled}
+            >
+              <span className="kds-toggle-knob" />
+            </button>
+          </div>
+
+          {settings.breaktime.enabled ? (
+            <div className="kds-settings-breaktime">
+              <div className="kds-settings-field">
+                <label className="kds-settings-label" htmlFor="bt-start">시작 시간</label>
+                <input
+                  id="bt-start"
+                  type="time"
+                  value={padHHMM(settings.breaktime.startHour, settings.breaktime.startMinute)}
+                  onChange={(e) => {
+                    const { hour, minute } = parseHHMM(e.target.value);
+                    onUpdate({ breaktime: { ...settings.breaktime, startHour: hour, startMinute: minute } });
+                  }}
+                />
+              </div>
+              <div className="kds-settings-field">
+                <label className="kds-settings-label" htmlFor="bt-duration">중지 시간 (분)</label>
+                <input
+                  id="bt-duration"
+                  type="number"
+                  min={5}
+                  max={480}
+                  value={settings.breaktime.durationMinutes}
+                  onChange={(e) => onUpdate({ breaktime: { ...settings.breaktime, durationMinutes: Math.max(5, Number(e.target.value)) } })}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* 주문 자동수락 */}
+        <div className="kds-settings-group">
+          <h3 className="kds-settings-group-title">주문 처리</h3>
+
+          <div className="kds-settings-row">
+            <div className="kds-settings-row-info">
+              <span className="kds-settings-row-label">주문 자동수락</span>
+              <span className="kds-settings-row-desc">
+                {settings.autoAccept ? "주문 수신 즉시 진행중 표시" : "수락 버튼을 눌러야 진행중 표시"}
+              </span>
+            </div>
+            <button
+              className={`kds-toggle${settings.autoAccept ? " on" : ""}`}
+              onClick={() => onUpdate({ autoAccept: !settings.autoAccept })}
+              type="button"
+              role="switch"
+              aria-checked={settings.autoAccept}
+            >
+              <span className="kds-toggle-knob" />
+            </button>
+          </div>
+        </div>
+
+        {/* 계정 */}
+        <div className="kds-settings-group">
+          <h3 className="kds-settings-group-title">계정</h3>
+          <div className="kds-settings-row">
+            <div className="kds-settings-row-info">
+              <span className="kds-settings-row-label">비밀번호 변경</span>
+              <span className="kds-settings-row-desc">변경 후 자동 로그아웃됩니다</span>
+            </div>
+            <button className="kds-settings-action-btn" onClick={onChangePasswordClick} type="button">
+              변경
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -1629,6 +1629,334 @@ button:not(:disabled):hover {
 }
 
 /* ─────────────────────────────────────────────
+   Full-page panel (Stats / Settings)
+───────────────────────────────────────────── */
+.kds-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px;
+  scrollbar-width: none;
+}
+
+.kds-panel::-webkit-scrollbar { display: none; }
+
+.kds-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kds-panel-title {
+  color: var(--color-text);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.kds-panel-subtitle {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+/* ─────────────────────────────────────────────
+   Stats Panel
+───────────────────────────────────────────── */
+.kds-stats-summary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.kds-stat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+}
+
+.kds-stat-label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.kds-stat-value {
+  align-items: baseline;
+  color: var(--color-text);
+  display: flex;
+  font-size: 28px;
+  font-weight: 800;
+  gap: 3px;
+  letter-spacing: -0.5px;
+}
+
+.kds-stat-value.accent {
+  color: var(--color-accent);
+}
+
+.kds-stat-value small {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.kds-stats-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.kds-stats-section-title {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.kds-stats-empty {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.kds-menu-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kds-menu-stat-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 140px 1fr 32px;
+}
+
+.kds-menu-stat-name {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kds-menu-stat-bar-wrap {
+  background: var(--color-surface-2);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.kds-menu-stat-bar {
+  background: var(--color-accent);
+  border-radius: 999px;
+  height: 100%;
+  min-width: 4px;
+  transition: width 0.3s ease;
+}
+
+.kds-menu-stat-count {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* ─────────────────────────────────────────────
+   Settings Panel
+───────────────────────────────────────────── */
+.kds-settings-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kds-settings-group {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.kds-settings-group-title {
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 10px 16px;
+  text-transform: uppercase;
+}
+
+.kds-settings-row {
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.kds-settings-row:last-child {
+  border-bottom: none;
+}
+
+.kds-settings-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kds-settings-row-label {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.kds-settings-row-desc {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.kds-settings-breaktime {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+  padding: 0 16px 14px;
+}
+
+.kds-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kds-settings-label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.kds-settings-error {
+  color: var(--color-error-text);
+  font-size: 13px;
+}
+
+.kds-settings-hint {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.kds-settings-action-btn {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  height: 34px;
+  padding: 0 14px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.kds-settings-action-btn:not(:disabled):hover {
+  background: var(--color-border);
+  border-color: var(--color-border-hover);
+}
+
+/* Toggle switch */
+.kds-toggle {
+  background: var(--color-border);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  flex-shrink: 0;
+  height: 26px;
+  padding: 3px;
+  position: relative;
+  transition: background 0.2s;
+  width: 46px;
+}
+
+.kds-toggle.on {
+  background: var(--color-accent);
+}
+
+.kds-toggle-knob {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  display: block;
+  height: 20px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transition: transform 0.2s;
+  width: 20px;
+}
+
+.kds-toggle.on .kds-toggle-knob {
+  transform: translateX(20px);
+}
+
+/* Segmented control */
+.kds-segmented {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+}
+
+.kds-segmented-btn {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  height: 28px;
+  padding: 0 10px;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.kds-segmented-btn.active {
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  color: var(--color-text);
+}
+
+.kds-segmented-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* primary modal btn */
+.kds-modal-btn.primary {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+
+.kds-modal-btn.primary:not(:disabled):hover {
+  background: var(--color-accent-hover);
+}
+
+/* ─────────────────────────────────────────────
    Responsive
 ───────────────────────────────────────────── */
 @media (max-width: 900px) {
