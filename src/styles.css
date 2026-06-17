@@ -874,6 +874,18 @@ button:not(:disabled):hover {
   to   { transform: rotate(360deg); }
 }
 
+/* New-arrival card glow + breathe */
+.kds-card.new-arrival {
+  animation: kds-card-glow 4s ease forwards;
+}
+
+@keyframes kds-card-glow {
+  0%   { box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.8), 0 0 24px rgba(249, 115, 22, 0.45); }
+  40%  { box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.6), 0 0 32px rgba(249, 115, 22, 0.35); }
+  70%  { box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.3), 0 0 16px rgba(249, 115, 22, 0.18); }
+  100% { box-shadow: none; }
+}
+
 /* ── Toast ── */
 .kds-toast {
   align-items: center;
@@ -945,19 +957,13 @@ button:not(:disabled):hover {
   overflow-x: auto;
   padding-bottom: 12px;
   scroll-snap-type: x proximity;
+  /* Hide scrollbar visually while keeping scroll functional */
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge legacy */
 }
 
 .kds-lane::-webkit-scrollbar {
-  height: 5px;
-}
-
-.kds-lane::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.kds-lane::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 999px;
+  display: none;                /* Chrome / Safari */
 }
 
 .kds-empty {
@@ -1066,22 +1072,55 @@ button:not(:disabled):hover {
 
 .kds-item {
   align-items: flex-start;
+  cursor: pointer;
   display: flex;
   gap: 10px;
-  padding: 7px 0;
+  padding: 7px 6px;
   border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  margin: 0 -6px;
+  transition: background 0.15s;
+  user-select: none;
 }
 
 .kds-item:last-child {
   border-bottom: none;
 }
 
+.kds-item:not(.item-done):hover {
+  background: var(--color-surface-2);
+}
+
 .kds-item.allergy-risk {
   background: rgba(239, 68, 68, 0.04);
-  border-radius: var(--radius-sm);
-  margin: 0 -6px;
-  padding-left: 6px;
-  padding-right: 6px;
+}
+
+/* Completed menu item + its options */
+.kds-item.item-done {
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.kds-item.item-done:hover {
+  background: rgba(22, 163, 74, 0.13);
+}
+
+.kds-item-qty.done {
+  background: #16a34a;
+  opacity: 0.7;
+}
+
+.kds-item-name.done {
+  color: #16a34a;
+  opacity: 0.85;
+}
+
+.kds-item.item-done .kds-item-options li {
+  color: #4ade80;
+  opacity: 0.85;
+}
+
+.kds-item.item-done .kds-item-options li::before {
+  color: #4ade80;
 }
 
 .kds-item-qty {

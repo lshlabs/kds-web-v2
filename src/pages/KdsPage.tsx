@@ -4,6 +4,8 @@ import { ApiError, apiGetKdsOrders, apiUpdateOrderStatus } from "../lib/api";
 import { createPreviewOrders, PREVIEW_MODE } from "../lib/preview";
 import type { AnalysisAction, AuthSession, Order, OrderAIAnalysis, OrderStatus } from "../types";
 
+const NEW_ORDER_GLOW_MS = 4000;
+
 const POLLING_INTERVAL_MS = 3000;
 type BoardTab = "RECEIVED" | "DONE";
 
@@ -16,6 +18,7 @@ type KdsPageProps = {
 export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   const [orders, setOrders] = useState<Order[]>(() => (PREVIEW_MODE ? createPreviewOrders() : []));
   const [loading, setLoading] = useState(!PREVIEW_MODE);
+  const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "error" | "info" } | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -23,6 +26,8 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   const [activeTab, setActiveTab] = useState<BoardTab>("RECEIVED");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [newOrderIds, setNewOrderIds] = useState<Set<number>>(new Set());
+  const knownOrderIdsRef = useRef<Set<number>>(new Set());
   const accountRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<number | null>(null);
 
@@ -42,7 +47,33 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
 
     try {
       const data = await requestWithReauth(session.accessToken, onUnauthorized, apiGetKdsOrders);
-      setOrders(data.orders);
+
+      // Detect truly new orders (not yet seen)
+      const incoming = data.orders;
+      const freshIds: number[] = [];
+      incoming.forEach((order) => {
+        if (!knownOrderIdsRef.current.has(order.id)) {
+          freshIds.push(order.id);
+          knownOrderIdsRef.current.add(order.id);
+        }
+      });
+
+      setOrders(incoming);
+
+      if (freshIds.length > 0) {
+        setNewOrderIds((prev) => {
+          const next = new Set(prev);
+          freshIds.forEach((id) => next.add(id));
+          return next;
+        });
+        window.setTimeout(() => {
+          setNewOrderIds((prev) => {
+            const next = new Set(prev);
+            freshIds.forEach((id) => next.delete(id));
+            return next;
+          });
+        }, NEW_ORDER_GLOW_MS);
+      }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         showToast("로그인이 만료되었습니다.");
@@ -89,18 +120,26 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
     [orders],
   );
 
+  async function handleManualRefresh() {
+    setRefreshing(true);
+    await fetchOrders();
+    // Keep spin visible for at least 600ms so the animation is perceptible
+    window.setTimeout(() => setRefreshing(false), 600);
+  }
+
   const receivedOrders = useMemo(
     () =>
       orders
         .filter((order) => order.status === "NEW" || order.status === "COOKING")
+        // Oldest left → newest right: ascending id, NEW before COOKING within same id group
         .sort(
-          (left, right) => statusWeight(left.status) - statusWeight(right.status) || right.id - left.id,
+          (left, right) => statusWeight(left.status) - statusWeight(right.status) || left.id - right.id,
         ),
     [orders],
   );
 
   const doneOrders = useMemo(
-    () => orders.filter((order) => order.status === "DONE").sort((left, right) => right.id - left.id),
+    () => orders.filter((order) => order.status === "DONE").sort((left, right) => left.id - right.id),
     [orders],
   );
 
@@ -342,9 +381,9 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
           <div className="kds-topbar-right">
             <button
               aria-label="주문 새로고침"
-              className={`kds-refresh-btn${loading ? " spinning" : ""}`}
-              disabled={loading}
-              onClick={() => void fetchOrders()}
+              className={`kds-refresh-btn${loading || refreshing ? " spinning" : ""}`}
+              disabled={loading || refreshing}
+              onClick={() => void handleManualRefresh()}
               type="button"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -375,6 +414,7 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
               {activeOrders.map((order) => (
                 <OrderCard
                   key={order.id}
+                  isNew={newOrderIds.has(order.id)}
                   now={now}
                   onUpdateStatus={updateOrderStatus}
                   order={order}
@@ -433,16 +473,20 @@ async function requestWithReauth<T>(
 }
 
 function OrderCard({
+  isNew,
   now,
   onUpdateStatus,
   order,
   updating,
 }: {
+  isNew: boolean;
   now: number;
   onUpdateStatus: (orderId: number, status: OrderStatus) => Promise<void>;
   order: Order;
   updating: boolean;
 }) {
+  const [completedItemIds, setCompletedItemIds] = useState<Set<number>>(new Set());
+
   const elapsed = formatElapsed(now, order.ordered_at ?? order.created_at);
   const elapsedMinutes = getElapsedMinutes(now, order.ordered_at ?? order.created_at);
   const allergyRiskItemIds = getAllergyRiskItemIds(order.aiAnalysis);
@@ -450,9 +494,21 @@ function OrderCard({
   const isWarning = elapsedMinutes >= 8 && elapsedMinutes < 15;
   const orderTypeLabel = getOrderTypeLabel(order.platform);
 
+  function toggleItemDone(itemId: number) {
+    setCompletedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }
+
   return (
     <article
-      className={`kds-card ${order.status.toLowerCase()}${isUrgent ? " urgent" : isWarning ? " warning" : ""}`}
+      className={`kds-card ${order.status.toLowerCase()}${isUrgent ? " urgent" : isWarning ? " warning" : ""}${isNew ? " new-arrival" : ""}`}
     >
       <div className="kds-card-head">
         <div className="kds-card-head-left">
@@ -469,24 +525,32 @@ function OrderCard({
       </div>
 
       <div className="kds-items">
-        {order.items.map((item) => (
-          <div
-            className={`kds-item${allergyRiskItemIds.has(item.id) ? " allergy-risk" : ""}`}
-            key={item.id}
-          >
-            <span className="kds-item-qty">{item.quantity}</span>
-            <div className="kds-item-body">
-              <span className="kds-item-name">{item.name}</span>
-              {item.options.length > 0 ? (
-                <ul className="kds-item-options">
-                  {item.options.map((option, index) => (
-                    <li key={`${item.id}-${index}`}>{option}</li>
-                  ))}
-                </ul>
-              ) : null}
+        {order.items.map((item) => {
+          const isDone = completedItemIds.has(item.id);
+          return (
+            <div
+              className={`kds-item${allergyRiskItemIds.has(item.id) ? " allergy-risk" : ""}${isDone ? " item-done" : ""}`}
+              key={item.id}
+              onClick={() => toggleItemDone(item.id)}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isDone}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleItemDone(item.id); }}
+            >
+              <span className={`kds-item-qty${isDone ? " done" : ""}`}>{item.quantity}</span>
+              <div className="kds-item-body">
+                <span className={`kds-item-name${isDone ? " done" : ""}`}>{item.name}</span>
+                {item.options.length > 0 ? (
+                  <ul className="kds-item-options">
+                    {item.options.map((option, index) => (
+                      <li key={`${item.id}-${index}`}>{option}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <RequestPanel analysis={order.aiAnalysis} customerRequest={order.customer_request} />
