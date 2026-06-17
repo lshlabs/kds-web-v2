@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { ApiError, apiGetCurrentUser, apiLogout, apiRefresh } from "./lib/api";
 import { clearStoredTokens, loadStoredTokens, saveAccessToken, saveStoredTokens } from "./lib/auth";
+import { createPreviewSession, PREVIEW_MODE } from "./lib/preview";
 import { AuthPage } from "./pages/AuthPage";
 import { KdsPage } from "./pages/KdsPage";
 import type { AuthResponse, AuthSession, CurrentUserResponse, RegisterResponse } from "./types";
@@ -17,6 +18,14 @@ export default function App() {
   }, []);
 
   async function bootstrapSession() {
+    if (PREVIEW_MODE) {
+      setSession(createPreviewSession());
+      setRegisteredPending(null);
+      setBootError(null);
+      setBooting(false);
+      return;
+    }
+
     const tokens = loadStoredTokens();
     if (!tokens.accessToken) {
       setBooting(false);
@@ -44,6 +53,10 @@ export default function App() {
   }
 
   async function reauthorize(overrideRefreshToken?: string) {
+    if (PREVIEW_MODE) {
+      return session?.accessToken ?? createPreviewSession().accessToken;
+    }
+
     const refreshToken = overrideRefreshToken ?? loadStoredTokens().refreshToken;
     if (!refreshToken) {
       clearStoredTokens();
@@ -89,6 +102,13 @@ export default function App() {
   }
 
   async function handleLogout() {
+    if (PREVIEW_MODE) {
+      setSession(createPreviewSession());
+      setRegisteredPending(null);
+      setBootError(null);
+      return;
+    }
+
     const refreshToken = session?.refreshToken ?? loadStoredTokens().refreshToken;
     try {
       if (refreshToken) {

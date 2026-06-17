@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, apiGetKdsOrders, apiUpdateOrderStatus } from "../lib/api";
+import { createPreviewOrders, PREVIEW_MODE } from "../lib/preview";
 import type { AnalysisAction, AuthSession, Order, OrderAIAnalysis, OrderStatus } from "../types";
 
 const POLLING_INTERVAL_MS = 3000;
@@ -13,8 +14,8 @@ type KdsPageProps = {
 };
 
 export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>(() => (PREVIEW_MODE ? createPreviewOrders() : []));
+  const [loading, setLoading] = useState(!PREVIEW_MODE);
   const [toast, setToast] = useState<{ message: string; type: "error" | "info" } | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -34,6 +35,11 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   }
 
   const fetchOrders = useCallback(async () => {
+    if (PREVIEW_MODE) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const data = await requestWithReauth(session.accessToken, onUnauthorized, apiGetKdsOrders);
       setOrders(data.orders);
@@ -99,6 +105,15 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   );
 
   async function updateOrderStatus(orderId: number, status: OrderStatus) {
+    if (PREVIEW_MODE) {
+      setUpdatingOrderId(orderId);
+      setOrders((current) =>
+        current.map((order) => (order.id === orderId ? { ...order, status, updated_at: new Date().toISOString() } : order)),
+      );
+      window.setTimeout(() => setUpdatingOrderId(null), 250);
+      return;
+    }
+
     setUpdatingOrderId(orderId);
     try {
       await requestWithReauth(session.accessToken, onUnauthorized, (accessToken) =>

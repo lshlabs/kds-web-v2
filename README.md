@@ -28,12 +28,15 @@ npm run dev
 
 ```bash
 VITE_DEEPORDER_API_URL=http://127.0.0.1:8000
+VITE_PREVIEW_MODE=false
 ```
 
 `kds-web`은 더 이상 `VITE_STORE_ID`를 사용하지 않습니다.
 주문 조회 / 상태 변경 매장 컨텍스트는 로그인한 계정의 `store_id`를 backend가 결정합니다.
 
 주소 검색 팝업을 쓰려면 backend에 `JUSO_CONFIRM_KEY`, `JUSO_RETURN_URL`이 설정되어 있어야 합니다.
+
+백엔드 없이 UI만 확인하려면 `VITE_PREVIEW_MODE=true`로 실행하면 승인된 테스트 계정과 샘플 주문이 자동으로 주입됩니다.
 
 ## Auth Flow
 
