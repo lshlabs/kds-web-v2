@@ -27,6 +27,14 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [newOrderIds, setNewOrderIds] = useState<Set<number>>(new Set());
+  // Front-only hidden order ids (제거 처리)
+  const [hiddenOrderIds, setHiddenOrderIds] = useState<Set<number>>(new Set());
+  // Context menu
+  const [contextMenu, setContextMenu] = useState<{ orderId: number; x: number; y: number } | null>(null);
+  // Modals
+  const [detailOrderId, setDetailOrderId] = useState<number | null>(null);
+  const [removeOrderId, setRemoveOrderId] = useState<number | null>(null);
+  const [clearDoneConfirm, setClearDoneConfirm] = useState(false);
   const knownOrderIdsRef = useRef<Set<number>>(new Set());
   const accountRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -104,6 +112,11 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
       if (accountRef.current && !accountRef.current.contains(event.target as Node)) {
         setAccountOpen(false);
       }
+      // Close context menu on any click outside
+      const target = event.target as Element;
+      if (!target.closest(".kds-context-menu")) {
+        setContextMenu(null);
+      }
     }
 
     document.addEventListener("mousedown", handleClick);
@@ -130,17 +143,20 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   const receivedOrders = useMemo(
     () =>
       orders
-        .filter((order) => order.status === "NEW" || order.status === "COOKING")
+        .filter((order) => (order.status === "NEW" || order.status === "COOKING") && !hiddenOrderIds.has(order.id))
         // Oldest left → newest right: ascending id, NEW before COOKING within same id group
         .sort(
           (left, right) => statusWeight(left.status) - statusWeight(right.status) || left.id - right.id,
         ),
-    [orders],
+    [orders, hiddenOrderIds],
   );
 
   const doneOrders = useMemo(
-    () => orders.filter((order) => order.status === "DONE").sort((left, right) => left.id - right.id),
-    [orders],
+    () =>
+      orders
+        .filter((order) => order.status === "DONE" && !hiddenOrderIds.has(order.id))
+        .sort((left, right) => left.id - right.id),
+    [orders, hiddenOrderIds],
   );
 
   async function updateOrderStatus(orderId: number, status: OrderStatus) {
@@ -379,6 +395,20 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
           </div>
 
           <div className="kds-topbar-right">
+            {activeTab === "DONE" && doneOrders.length > 0 ? (
+              <button
+                aria-label="완료 주문 내역 정리"
+                className="kds-refresh-btn"
+                onClick={() => setClearDoneConfirm(true)}
+                type="button"
+              >
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M7 8v6M10 8v6M13 8v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  <path d="M3 5h14M8 5V3h4v2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5 5l1 12h8l1-12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ) : null}
             <button
               aria-label="주문 새로고침"
               className={`kds-refresh-btn${loading || refreshing ? " spinning" : ""}`}
@@ -416,6 +446,7 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
                   key={order.id}
                   isNew={newOrderIds.has(order.id)}
                   now={now}
+                  onContextMenu={(orderId, x, y) => setContextMenu({ orderId, x, y })}
                   onUpdateStatus={updateOrderStatus}
                   order={order}
                   updating={updatingOrderId === order.id}
@@ -425,6 +456,194 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
           )}
         </section>
       </div>
+
+      {/* Context menu */}
+      {contextMenu ? (
+        <div
+          className="kds-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          role="menu"
+        >
+          <button
+            className="kds-context-menu-item"
+            onClick={() => {
+              setDetailOrderId(contextMenu.orderId);
+              setContextMenu(null);
+            }}
+            role="menuitem"
+            type="button"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+              <line x1="8" y1="7" x2="8" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="8" cy="5" r="0.8" fill="currentColor" />
+            </svg>
+            상세정보
+          </button>
+          <button
+            className="kds-context-menu-item danger"
+            onClick={() => {
+              setRemoveOrderId(contextMenu.orderId);
+              setContextMenu(null);
+            }}
+            role="menuitem"
+            type="button"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M5.5 6.5v5M8 6.5v5M10.5 6.5v5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <path d="M2.5 4h11M6 4V2.5h4V4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M4 4l.8 9.5h6.4L12 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            제거
+          </button>
+        </div>
+      ) : null}
+
+      {/* Detail modal */}
+      {detailOrderId !== null ? (() => {
+        const order = orders.find((o) => o.id === detailOrderId);
+        if (!order) return null;
+        const totalAmount = order.items.reduce((sum, item) => sum + (item.total_price ?? 0), 0);
+        return (
+          <div className="kds-modal-backdrop" onClick={() => setDetailOrderId(null)}>
+            <div className="kds-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="주문 상세정보">
+              <div className="kds-modal-head">
+                <h2 className="kds-modal-title">주문 상세정보</h2>
+                <button className="kds-modal-close" onClick={() => setDetailOrderId(null)} type="button" aria-label="닫기">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <line x1="2" y1="2" x2="12" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    <line x1="12" y1="2" x2="2" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <div className="kds-modal-body">
+                <div className="kds-detail-rows">
+                  <div className="kds-detail-row"><span>주문번호</span><strong>#{order.order_number ?? order.id}</strong></div>
+                  <div className="kds-detail-row"><span>주문 시간</span><strong>{order.ordered_at ? formatDetailTime(order.ordered_at) : formatDetailTime(order.created_at)}</strong></div>
+                  <div className="kds-detail-row"><span>플랫폼</span><strong>{getOrderTypeLabel(order.platform)} ({order.platform})</strong></div>
+                  {totalAmount > 0 ? (
+                    <div className="kds-detail-row"><span>결제금액</span><strong>{totalAmount.toLocaleString()}원</strong></div>
+                  ) : null}
+                </div>
+                <div className="kds-detail-section-label">메뉴</div>
+                <div className="kds-detail-items">
+                  {order.items.map((item) => (
+                    <div className="kds-detail-item" key={item.id}>
+                      <span className="kds-detail-item-qty">{item.quantity}</span>
+                      <div>
+                        <div className="kds-detail-item-name">{item.name}</div>
+                        {item.options.length > 0 ? (
+                          <ul className="kds-detail-item-options">
+                            {item.options.map((opt, i) => <li key={i}>{opt}</li>)}
+                          </ul>
+                        ) : null}
+                      </div>
+                      {item.total_price ? (
+                        <span className="kds-detail-item-price">{item.total_price.toLocaleString()}원</span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+                {order.customer_request ? (
+                  <>
+                    <div className="kds-detail-section-label">요청사항</div>
+                    <p className="kds-detail-text">{order.customer_request}</p>
+                  </>
+                ) : null}
+                {order.delivery_request ? (
+                  <>
+                    <div className="kds-detail-section-label">배달 요청</div>
+                    <p className="kds-detail-text">{order.delivery_request}</p>
+                  </>
+                ) : null}
+                <div className="kds-detail-section-label kds-detail-sensitive-label">민감정보</div>
+                <div className="kds-detail-rows">
+                  {(() => {
+                    const store = (session as AuthSession).store;
+                    return (
+                      <>
+                        <div className="kds-detail-row"><span>주소</span><strong>{store.roadAddress ?? store.jibunAddress ?? "-"}{store.addressDetail ? ` ${store.addressDetail}` : ""}</strong></div>
+                        <div className="kds-detail-row"><span>연락처</span><strong>{store.phone ?? "-"}</strong></div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
+
+      {/* Remove confirm modal */}
+      {removeOrderId !== null ? (
+        <div className="kds-modal-backdrop" onClick={() => setRemoveOrderId(null)}>
+          <div className="kds-modal kds-modal--sm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="kds-modal-head">
+              <h2 className="kds-modal-title">주문 제거</h2>
+            </div>
+            <div className="kds-modal-body">
+              <p className="kds-modal-desc">주문을 제거하시겠습니까?</p>
+            </div>
+            <div className="kds-modal-foot">
+              <button
+                className="kds-modal-btn secondary"
+                onClick={() => setRemoveOrderId(null)}
+                type="button"
+              >
+                아니오
+              </button>
+              <button
+                className="kds-modal-btn danger"
+                onClick={() => {
+                  setHiddenOrderIds((prev) => new Set(prev).add(removeOrderId));
+                  setRemoveOrderId(null);
+                }}
+                type="button"
+              >
+                예
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Clear done confirm modal */}
+      {clearDoneConfirm ? (
+        <div className="kds-modal-backdrop" onClick={() => setClearDoneConfirm(false)}>
+          <div className="kds-modal kds-modal--sm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="kds-modal-head">
+              <h2 className="kds-modal-title">완료 내역 정리</h2>
+            </div>
+            <div className="kds-modal-body">
+              <p className="kds-modal-desc">주문완료 내역을 삭제할까요?</p>
+            </div>
+            <div className="kds-modal-foot">
+              <button
+                className="kds-modal-btn secondary"
+                onClick={() => setClearDoneConfirm(false)}
+                type="button"
+              >
+                아니오
+              </button>
+              <button
+                className="kds-modal-btn danger"
+                onClick={() => {
+                  const doneIds = orders.filter((o) => o.status === "DONE").map((o) => o.id);
+                  setHiddenOrderIds((prev) => {
+                    const next = new Set(prev);
+                    doneIds.forEach((id) => next.add(id));
+                    return next;
+                  });
+                  setClearDoneConfirm(false);
+                }}
+                type="button"
+              >
+                예
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {toast ? (
         <div
@@ -472,20 +691,26 @@ async function requestWithReauth<T>(
   }
 }
 
+// Threshold: cards with >3 items use 2-column item layout
+const ITEMS_2COL_THRESHOLD = 4;
+
 function OrderCard({
   isNew,
   now,
+  onContextMenu,
   onUpdateStatus,
   order,
   updating,
 }: {
   isNew: boolean;
   now: number;
+  onContextMenu: (orderId: number, x: number, y: number) => void;
   onUpdateStatus: (orderId: number, status: OrderStatus) => Promise<void>;
   order: Order;
   updating: boolean;
 }) {
   const [completedItemIds, setCompletedItemIds] = useState<Set<number>>(new Set());
+  const longPressTimerRef = useRef<number | null>(null);
 
   const elapsed = formatElapsed(now, order.ordered_at ?? order.created_at);
   const elapsedMinutes = getElapsedMinutes(now, order.ordered_at ?? order.created_at);
@@ -493,6 +718,7 @@ function OrderCard({
   const isUrgent = elapsedMinutes >= 15;
   const isWarning = elapsedMinutes >= 8 && elapsedMinutes < 15;
   const orderTypeLabel = getOrderTypeLabel(order.platform);
+  const use2Col = order.items.length >= ITEMS_2COL_THRESHOLD;
 
   function toggleItemDone(itemId: number) {
     setCompletedItemIds((prev) => {
@@ -506,9 +732,32 @@ function OrderCard({
     });
   }
 
+  function handlePointerDown(e: React.PointerEvent<HTMLElement>) {
+    if (e.button !== 0) return; // only primary button for long press
+    longPressTimerRef.current = window.setTimeout(() => {
+      onContextMenu(order.id, e.clientX, e.clientY);
+    }, 600);
+  }
+
+  function handlePointerUp() {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function handleContextMenu(e: React.MouseEvent<HTMLElement>) {
+    e.preventDefault();
+    onContextMenu(order.id, e.clientX, e.clientY);
+  }
+
   return (
     <article
       className={`kds-card ${order.status.toLowerCase()}${isUrgent ? " urgent" : isWarning ? " warning" : ""}${isNew ? " new-arrival" : ""}`}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+      onContextMenu={handleContextMenu}
     >
       <div className="kds-card-head">
         <div className="kds-card-head-left">
@@ -524,7 +773,7 @@ function OrderCard({
         <span className="kds-order-type">{orderTypeLabel}</span>
       </div>
 
-      <div className="kds-items">
+      <div className={`kds-items${use2Col ? " kds-items--2col" : ""}`}>
         {order.items.map((item) => {
           const isDone = completedItemIds.has(item.id);
           return (
@@ -699,4 +948,16 @@ function statusWeight(status: OrderStatus) {
   if (status === "COOKING") return 1;
   if (status === "DONE") return 2;
   return 3;
+}
+
+function formatDetailTime(timestamp: string) {
+  const date = parseApiTimestamp(timestamp);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
