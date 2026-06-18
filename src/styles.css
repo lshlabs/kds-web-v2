@@ -336,7 +336,7 @@ button:not(:disabled):hover {
   pointer-events: none;
   position: absolute;
   top: 0;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.3s ease-in-out;
   width: 100%;
 }
 
@@ -772,10 +772,29 @@ button:not(:disabled):hover {
   border-bottom: 1px solid var(--color-border);
   display: flex;
   flex-shrink: 0;
-  gap: 16px;
+  gap: 12px;
   height: 52px;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 16px;
+  position: relative;
+}
+
+.kds-topbar-left {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  position: relative;
+}
+
+.kds-topbar-page-title {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 /* ── Top bar tabs ── */
@@ -838,6 +857,220 @@ button:not(:disabled):hover {
   gap: 12px;
 }
 
+/* ── Store status indicator ── */
+.kds-store-status {
+  align-items: center;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-subtle);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.kds-store-status:not(:disabled):hover {
+  background: var(--color-border);
+  border-color: var(--color-border-hover);
+}
+
+.kds-store-status--open {
+  background: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.3);
+  color: #15803d;
+}
+
+.kds-store-status--open:not(:disabled):hover {
+  background: rgba(22, 163, 74, 0.14);
+}
+
+.kds-store-status--paused {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #b45309;
+}
+
+.kds-store-status--paused:not(:disabled):hover {
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.kds-store-status--closed {
+  background: rgba(220, 38, 38, 0.07);
+  border-color: rgba(220, 38, 38, 0.28);
+  color: #dc2626;
+}
+
+.kds-store-status--closed:not(:disabled):hover {
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.kds-store-status-dot {
+  border-radius: 50%;
+  display: block;
+  flex-shrink: 0;
+  height: 7px;
+  width: 7px;
+}
+
+.kds-store-status--open .kds-store-status-dot,
+.kds-store-status-dot--open {
+  background: #16a34a;
+}
+
+.kds-store-status--paused .kds-store-status-dot,
+.kds-store-status-dot--paused {
+  background: #f59e0b;
+}
+
+.kds-store-status--closed .kds-store-status-dot,
+.kds-store-status-dot--closed {
+  background: #ef4444;
+}
+
+/* Store status popup */
+.kds-store-status-popup {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  left: 0;
+  min-width: 180px;
+  padding: 8px;
+  position: absolute;
+  top: calc(100% + 8px);
+  z-index: 200;
+  animation: kds-ctx-in 0.12s ease;
+}
+
+.kds-store-status-popup-title {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 2px 8px 6px;
+  text-transform: uppercase;
+}
+
+.kds-store-status-popup-btn {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-subtle);
+  display: flex;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.kds-store-status-popup-btn:not(:disabled):hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.kds-store-status-popup-btn.active {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.kds-store-status-popup-close {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  display: flex;
+  height: 24px;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 0;
+  width: 100%;
+}
+
+.kds-store-status-popup-close:not(:disabled):hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+/* Pause duration control */
+.kds-pause-duration {
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+.kds-pause-duration-label {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 0 8px;
+  text-transform: uppercase;
+}
+
+.kds-pause-duration-control {
+  align-items: center;
+  display: flex;
+  gap: 0;
+  justify-content: center;
+}
+
+.kds-pause-stepper {
+  align-items: center;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  display: flex;
+  font-size: 16px;
+  font-weight: 600;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  width: 32px;
+}
+
+.kds-pause-stepper:not(:disabled):hover {
+  background: var(--color-border);
+}
+
+.kds-pause-duration-value {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 700;
+  min-width: 60px;
+  text-align: center;
+}
+
+.kds-pause-confirm {
+  background: var(--color-accent);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent-fg);
+  font-size: 13px;
+  font-weight: 600;
+  height: 32px;
+  margin: 0 8px;
+}
+
+.kds-pause-confirm:not(:disabled):hover {
+  background: var(--color-accent-hover);
+}
+
 /* Refresh button */
 .kds-refresh-btn {
   align-items: center;
@@ -872,18 +1105,6 @@ button:not(:disabled):hover {
 @keyframes kds-spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
-}
-
-/* New-arrival card glow + breathe */
-.kds-card.new-arrival {
-  animation: kds-card-glow 4s ease forwards;
-}
-
-@keyframes kds-card-glow {
-  0%   { box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.8), 0 0 24px rgba(249, 115, 22, 0.45); }
-  40%  { box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.6), 0 0 32px rgba(249, 115, 22, 0.35); }
-  70%  { box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.3), 0 0 16px rgba(249, 115, 22, 0.18); }
-  100% { box-shadow: none; }
 }
 
 /* ── Toast ── */
@@ -1065,43 +1286,48 @@ button:not(:disabled):hover {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 1px;
-  padding: 8px 14px;
+  gap: 0;
   overflow-y: auto;
+  padding: 4px 14px 8px;
 }
 
 .kds-item {
   align-items: flex-start;
+  border-bottom: 1px solid var(--color-border);
   cursor: pointer;
   display: flex;
   gap: 10px;
-  padding: 7px 6px;
-  border-bottom: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  margin: 0 -6px;
-  transition: background 0.15s;
+  padding: 9px 0;
+  transition: background 0.12s;
   user-select: none;
 }
 
+.kds-item--last,
 .kds-item:last-child {
   border-bottom: none;
 }
 
 .kds-item:not(.item-done):hover {
   background: var(--color-surface-2);
+  margin: 0 -6px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 .kds-item.allergy-risk {
   background: rgba(239, 68, 68, 0.04);
 }
 
-/* Completed menu item + its options */
+/* Completed menu item + its options — use background only, no extra text */
 .kds-item.item-done {
-  background: rgba(22, 163, 74, 0.08);
+  background: rgba(22, 163, 74, 0.09);
+  margin: 0 -12px;
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 .kds-item.item-done:hover {
-  background: rgba(22, 163, 74, 0.13);
+  background: rgba(22, 163, 74, 0.14);
 }
 
 .kds-item-qty.done {
@@ -2171,7 +2397,7 @@ button:not(:disabled):hover {
   pointer-events: none;
   position: absolute;
   top: 0;
-  transition: opacity 0.22s ease;
+  transition: opacity 0.3s ease-in-out;
   width: 100%;
 }
 
@@ -2391,21 +2617,6 @@ button:not(:disabled):hover {
 /* Card done: tinted background for visibility */
 .kds-card.done .kds-items {
   background: var(--color-surface);
-}
-
-/* Completed menu item contrast improvement */
-.kds-item.item-done {
-  background: rgba(22, 163, 74, 0.06);
-}
-
-/* Inner card items padding tweak for readability */
-.kds-items {
-  gap: 0;
-  padding: 6px 12px 10px;
-}
-
-.kds-item {
-  padding: 8px 6px;
 }
 
 /* My tasks card gap */

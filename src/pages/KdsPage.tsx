@@ -4,10 +4,10 @@ import { ApiError, apiGetKdsOrders, apiUpdateOrderStatus } from "../lib/api";
 import { createPreviewOrders, PREVIEW_MODE } from "../lib/preview";
 import type { AnalysisAction, AuthSession, Order, OrderAIAnalysis, OrderStatus } from "../types";
 
-const NEW_ORDER_GLOW_MS = 4000;
-
 const POLLING_INTERVAL_MS = 3000;
 type BoardTab = "RECEIVED" | "DONE" | "MY_TASKS" | "STATS" | "SETTINGS" | "STAFF";
+
+type StoreStatus = "OPEN" | "PAUSED" | "CLOSED";
 
 type StaffMember = {
   id: string;
@@ -57,7 +57,10 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   const [activeTab, setActiveTab] = useState<BoardTab>("RECEIVED");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [newOrderIds, setNewOrderIds] = useState<Set<number>>(new Set());
+  // Store status (local state — no backend)
+  const [storeStatus, setStoreStatus] = useState<StoreStatus>("OPEN");
+  const [storeStatusPopup, setStoreStatusPopup] = useState(false);
+  const [pauseMinutes, setPauseMinutes] = useState(10);
   // Assigned menus for "내 업무" tab (local state — no backend)
   const [assignedMenus, setAssignedMenus] = useState<AssignedMenu[]>([
     { id: "demo-1", name: "짜장면" },
@@ -87,7 +90,6 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
   const [pwConfirm, setPwConfirm] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSubmitting, setPwSubmitting] = useState(false);
-  const knownOrderIdsRef = useRef<Set<number>>(new Set());
   const accountRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<number | null>(null);
 
@@ -108,32 +110,7 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
     try {
       const data = await requestWithReauth(session.accessToken, onUnauthorized, apiGetKdsOrders);
 
-      // Detect truly new orders (not yet seen)
-      const incoming = data.orders;
-      const freshIds: number[] = [];
-      incoming.forEach((order) => {
-        if (!knownOrderIdsRef.current.has(order.id)) {
-          freshIds.push(order.id);
-          knownOrderIdsRef.current.add(order.id);
-        }
-      });
-
-      setOrders(incoming);
-
-      if (freshIds.length > 0) {
-        setNewOrderIds((prev) => {
-          const next = new Set(prev);
-          freshIds.forEach((id) => next.add(id));
-          return next;
-        });
-        window.setTimeout(() => {
-          setNewOrderIds((prev) => {
-            const next = new Set(prev);
-            freshIds.forEach((id) => next.delete(id));
-            return next;
-          });
-        }, NEW_ORDER_GLOW_MS);
-      }
+      setOrders(data.orders);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         showToast("로그인이 만료되었습니다.");
@@ -169,6 +146,10 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
       if (!target.closest(".kds-context-menu")) {
         setContextMenu(null);
       }
+      // Close store status popup on any click outside
+      if (!target.closest(".kds-store-status") && !target.closest(".kds-store-status-popup")) {
+        setStoreStatusPopup(false);
+      }
     }
 
     document.addEventListener("mousedown", handleClick);
@@ -196,10 +177,14 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
     () =>
       orders
         .filter((order) => (order.status === "NEW" || order.status === "COOKING") && !hiddenOrderIds.has(order.id))
-        // Oldest left → newest right: ascending id, NEW before COOKING within same id group
-        .sort(
-          (left, right) => statusWeight(left.status) - statusWeight(right.status) || left.id - right.id,
-        ),
+        // Unaccepted (NEW) first, then Accepted (COOKING); within each group sort by order time ascending
+        .sort((left, right) => {
+          const sw = statusWeight(left.status) - statusWeight(right.status);
+          if (sw !== 0) return sw;
+          const lt = parseApiTimestamp(left.ordered_at ?? left.created_at).getTime();
+          const rt = parseApiTimestamp(right.ordered_at ?? right.created_at).getTime();
+          return lt - rt;
+        }),
     [orders, hiddenOrderIds],
   );
 
@@ -207,7 +192,12 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
     () =>
       orders
         .filter((order) => order.status === "DONE" && !hiddenOrderIds.has(order.id))
-        .sort((left, right) => left.id - right.id),
+        // Most recently completed first
+        .sort((left, right) => {
+          const lt = parseApiTimestamp(left.updated_at).getTime();
+          const rt = parseApiTimestamp(right.updated_at).getTime();
+          return rt - lt;
+        }),
     [orders, hiddenOrderIds],
   );
 
@@ -334,14 +324,15 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
         </button>
 
         <div className="kds-sidebar-nav">
+          {/* Work — navigates to RECEIVED (the default work view) */}
           <button
-            className={`kds-sidebar-item${activeTab === "RECEIVED" ? " active" : ""}`}
+            className={`kds-sidebar-item${(activeTab === "RECEIVED" || activeTab === "DONE" || activeTab === "MY_TASKS") ? " active" : ""}`}
             onClick={() => {
               setActiveTab("RECEIVED");
               setSidebarOpen(false);
             }}
             type="button"
-            title="접수"
+            title="업무"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
               <rect x="3" y="2" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="1.6" />
@@ -351,7 +342,7 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
             </svg>
             {sidebarOpen && (
               <span>
-                접수
+                업무
                 {counts.NEW + counts.COOKING > 0 ? (
                   <em className="kds-sidebar-badge">{counts.NEW + counts.COOKING}</em>
                 ) : null}
@@ -361,50 +352,6 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
               <em className="kds-sidebar-dot" aria-hidden="true" />
             ) : null}
           </button>
-
-          <button
-            className={`kds-sidebar-item${activeTab === "DONE" ? " active" : ""}`}
-            onClick={() => {
-              setActiveTab("DONE");
-              setSidebarOpen(false);
-            }}
-            type="button"
-            title="완료"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.6" />
-              <path
-                d="M5.5 9L8 11.5L12.5 7"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            {sidebarOpen && (
-              <span>
-                완료
-                {counts.DONE > 0 ? <em className="kds-sidebar-badge secondary">{counts.DONE}</em> : null}
-              </span>
-            )}
-          </button>
-
-          {!isManager ? (
-            <button
-              className={`kds-sidebar-item${activeTab === "MY_TASKS" ? " active" : ""}`}
-              onClick={() => { setActiveTab("MY_TASKS"); setSidebarOpen(false); }}
-              type="button"
-              title="내 업무"
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                <circle cx="7" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M2 15c0-2.76 2.24-5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M11 11l1.5 1.5L15 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="13" cy="13" r="3.5" stroke="currentColor" strokeWidth="1.3" />
-              </svg>
-              {sidebarOpen && <span>내 업무</span>}
-            </button>
-          ) : null}
 
           {isManager ? (
             <button
@@ -506,28 +453,96 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
 
       <div className="kds-main">
         <header className="kds-topbar">
-          <div className="kds-topbar-tabs" role="tablist">
+          <div className="kds-topbar-left">
+            {/* Store status indicator */}
             <button
-              aria-selected={activeTab === "RECEIVED"}
-              className={`kds-tab${activeTab === "RECEIVED" ? " active" : ""}`}
-              onClick={() => setActiveTab("RECEIVED")}
-              role="tab"
+              className={`kds-store-status kds-store-status--${storeStatus.toLowerCase()}`}
+              onClick={() => setStoreStatusPopup(true)}
               type="button"
+              aria-label="매장 상태 변경"
             >
-              접수
-              <span className="kds-tab-count">{receivedOrders.length}</span>
+              <span className="kds-store-status-dot" aria-hidden="true" />
+              {storeStatus === "OPEN" ? "영업중" : storeStatus === "PAUSED" ? "일시중지" : "영업종료"}
             </button>
-            <button
-              aria-selected={activeTab === "DONE"}
-              className={`kds-tab${activeTab === "DONE" ? " active" : ""}`}
-              onClick={() => setActiveTab("DONE")}
-              role="tab"
-              type="button"
-            >
-              완료
-              <span className="kds-tab-count">{doneOrders.length}</span>
-            </button>
-            {!isManager ? (
+
+            {/* Store status popup */}
+            {storeStatusPopup ? (
+              <div className="kds-store-status-popup" role="dialog" aria-modal="true" aria-label="매장 상태 변경">
+                <p className="kds-store-status-popup-title">매장 상태</p>
+                {(["OPEN", "PAUSED", "CLOSED"] as StoreStatus[]).map((s) => (
+                  <button
+                    key={s}
+                    className={`kds-store-status-popup-btn${storeStatus === s ? " active" : ""}`}
+                    onClick={() => { setStoreStatus(s); if (s !== "PAUSED") setStoreStatusPopup(false); }}
+                    type="button"
+                  >
+                    <span className={`kds-store-status-dot kds-store-status-dot--${s.toLowerCase()}`} aria-hidden="true" />
+                    {s === "OPEN" ? "영업중" : s === "PAUSED" ? "일시중지" : "영업종료"}
+                  </button>
+                ))}
+                {storeStatus === "PAUSED" ? (
+                  <div className="kds-pause-duration">
+                    <span className="kds-pause-duration-label">일시중지 시간</span>
+                    <div className="kds-pause-duration-control">
+                      <button
+                        className="kds-pause-stepper"
+                        onClick={() => setPauseMinutes((m) => Math.max(10, m - 10))}
+                        type="button"
+                        aria-label="10분 감소"
+                      >−</button>
+                      <span className="kds-pause-duration-value">{pauseMinutes}분</span>
+                      <button
+                        className="kds-pause-stepper"
+                        onClick={() => setPauseMinutes((m) => m + 10)}
+                        type="button"
+                        aria-label="10분 증가"
+                      >+</button>
+                    </div>
+                    <button
+                      className="kds-pause-confirm"
+                      onClick={() => setStoreStatusPopup(false)}
+                      type="button"
+                    >확인</button>
+                  </div>
+                ) : null}
+                <button
+                  className="kds-store-status-popup-close"
+                  onClick={() => setStoreStatusPopup(false)}
+                  type="button"
+                  aria-label="닫기"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                    <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Top tabs — only shown on the Work page */}
+          {(activeTab === "RECEIVED" || activeTab === "DONE" || activeTab === "MY_TASKS") ? (
+            <div className="kds-topbar-tabs" role="tablist">
+              <button
+                aria-selected={activeTab === "RECEIVED"}
+                className={`kds-tab${activeTab === "RECEIVED" ? " active" : ""}`}
+                onClick={() => setActiveTab("RECEIVED")}
+                role="tab"
+                type="button"
+              >
+                접수
+                <span className="kds-tab-count">{receivedOrders.length}</span>
+              </button>
+              <button
+                aria-selected={activeTab === "DONE"}
+                className={`kds-tab${activeTab === "DONE" ? " active" : ""}`}
+                onClick={() => setActiveTab("DONE")}
+                role="tab"
+                type="button"
+              >
+                완료
+                <span className="kds-tab-count">{doneOrders.length}</span>
+              </button>
               <button
                 aria-selected={activeTab === "MY_TASKS"}
                 className={`kds-tab${activeTab === "MY_TASKS" ? " active" : ""}`}
@@ -537,39 +552,12 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
               >
                 내 업무
               </button>
-            ) : null}
-            {isManager ? (
-              <button
-                aria-selected={activeTab === "STAFF"}
-                className={`kds-tab${activeTab === "STAFF" ? " active" : ""}`}
-                onClick={() => setActiveTab("STAFF")}
-                role="tab"
-                type="button"
-              >
-                직원
-              </button>
-            ) : null}
-            {isManager ? (
-              <button
-                aria-selected={activeTab === "STATS"}
-                className={`kds-tab${activeTab === "STATS" ? " active" : ""}`}
-                onClick={() => setActiveTab("STATS")}
-                role="tab"
-                type="button"
-              >
-                통계
-              </button>
-            ) : null}
-            <button
-              aria-selected={activeTab === "SETTINGS"}
-              className={`kds-tab${activeTab === "SETTINGS" ? " active" : ""}`}
-              onClick={() => setActiveTab("SETTINGS")}
-              role="tab"
-              type="button"
-            >
-              설정
-            </button>
-          </div>
+            </div>
+          ) : (
+            <div className="kds-topbar-page-title">
+              {activeTab === "STAFF" ? "직원 관리" : activeTab === "STATS" ? "통계" : "설정"}
+            </div>
+          )}
 
           <div className="kds-topbar-right">
             {activeTab === "DONE" && doneOrders.length > 0 ? (
@@ -618,7 +606,7 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
             onAssignedMenusChange={setAssignedMenus}
             orders={orders}
           />
-        ) : activeTab === "STAFF" ? (
+        ) : activeTab === "STAFF" && isManager ? (
           <StaffPanel />
         ) : activeTab === "STATS" ? (
           <StatsPanel orders={orders} />
@@ -640,7 +628,6 @@ export function KdsPage({ session, onLogout, onUnauthorized }: KdsPageProps) {
                   <OrderCard
                     key={order.id}
                     completedItemIds={completedItemIds}
-                    isNew={newOrderIds.has(order.id)}
                     now={now}
                     onContextMenu={(orderId, x, y) => setContextMenu({ orderId, x, y })}
                     onToggleItemDone={(itemId) => setCompletedItemIds((prev) => {
@@ -937,7 +924,6 @@ const ITEMS_2COL_THRESHOLD = 4;
 
 function OrderCard({
   completedItemIds,
-  isNew,
   now,
   onContextMenu,
   onToggleItemDone,
@@ -946,7 +932,6 @@ function OrderCard({
   updating,
 }: {
   completedItemIds: Set<number>;
-  isNew: boolean;
   now: number;
   onContextMenu: (orderId: number, x: number, y: number) => void;
   onToggleItemDone: (itemId: number) => void;
@@ -985,7 +970,7 @@ function OrderCard({
 
   return (
     <article
-      className={`kds-card ${order.status.toLowerCase()}${isUrgent ? " urgent" : isWarning ? " warning" : ""}${isNew ? " new-arrival" : ""}`}
+      className={`kds-card ${order.status.toLowerCase()}${isUrgent ? " urgent" : isWarning ? " warning" : ""}`}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
@@ -1006,11 +991,12 @@ function OrderCard({
       </div>
 
       <div className={`kds-items${use2Col ? " kds-items--2col" : ""}`}>
-        {order.items.map((item) => {
+        {order.items.map((item, idx) => {
           const isDone = completedItemIds.has(item.id);
+          const isLast = idx === order.items.length - 1;
           return (
             <div
-              className={`kds-item${allergyRiskItemIds.has(item.id) ? " allergy-risk" : ""}${isDone ? " item-done" : ""}`}
+              className={`kds-item${allergyRiskItemIds.has(item.id) ? " allergy-risk" : ""}${isDone ? " item-done" : ""}${isLast ? " kds-item--last" : ""}`}
               key={item.id}
               onClick={() => onToggleItemDone(item.id)}
               role="button"
@@ -1022,7 +1008,7 @@ function OrderCard({
               <div className="kds-item-body">
                 <span className={`kds-item-name${isDone ? " done" : ""}`}>{item.name}</span>
                 {item.options.length > 0 ? (
-                  <ul className="kds-item-options">
+                  <ul className="kds-item-options" aria-label="옵션">
                     {item.options.map((option, index) => (
                       <li key={`${item.id}-${index}`}>{option}</li>
                     ))}
