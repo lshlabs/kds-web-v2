@@ -267,174 +267,186 @@ export function AuthPage({
               </div>
             ) : null}
 
-            {tab === "login" ? (
-              <form className="auth-form" onSubmit={handleLoginSubmit} noValidate>
-                <div className="field">
-                  <label htmlFor="login-email">이메일</label>
-                  <input
-                    id="login-email"
-                    ref={emailRef}
-                    autoComplete="email"
-                    name="email"
-                    onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
-                    required
-                    type="email"
-                    value={loginForm.email}
-                  />
-                </div>
-
-                <div className="field">
-                  <label htmlFor="login-password">비밀번호</label>
-                  <input
-                    id="login-password"
-                    autoComplete="current-password"
-                    minLength={8}
-                    name="password"
-                    onChange={(event) =>
-                      setLoginForm((current) => ({ ...current, password: event.target.value }))
-                    }
-                    required
-                    type="password"
-                    value={loginForm.password}
-                  />
-                </div>
-
-                <div className="login-options">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={rememberEmail}
-                      onChange={(event) => setRememberEmail(event.target.checked)}
-                    />
-                    아이디 저장
-                  </label>
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={autoLogin}
-                      onChange={(event) => {
-                        const checked = event.target.checked;
-                        setAutoLogin(checked);
-                        setLoginForm((current) => ({ ...current, autoLogin: checked }));
-                      }}
-                    />
-                    자동 로그인
-                  </label>
-                </div>
-
-                <button className="auth-submit" disabled={submitting} type="submit">
-                  {submitting ? "로그인 중…" : "로그인"}
-                </button>
-              </form>
-            ) : (
-              <form className="auth-form" onSubmit={handleRegisterSubmit} noValidate>
-                <div className="field">
-                  <label htmlFor="reg-name">이름</label>
-                  <input
-                    id="reg-name"
-                    name="name"
-                    onChange={(event) => setRegisterForm((current) => ({ ...current, name: event.target.value }))}
-                    required
-                    value={registerForm.name}
-                  />
-                </div>
-
-                <div className="field">
-                  <label htmlFor="reg-email">이메일</label>
-                  <input
-                    id="reg-email"
-                    autoComplete="email"
-                    name="email"
-                    onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))}
-                    required
-                    type="email"
-                    value={registerForm.email}
-                  />
-                </div>
-
-                <div className="field">
-                  <label htmlFor="reg-password">비밀번호</label>
-                  <input
-                    id="reg-password"
-                    autoComplete="new-password"
-                    minLength={8}
-                    name="password"
-                    onChange={(event) =>
-                      setRegisterForm((current) => ({ ...current, password: event.target.value }))
-                    }
-                    required
-                    type="password"
-                    value={registerForm.password}
-                  />
-                </div>
-
-                <div className="field-row">
+            <div className="auth-tab-panels">
+              {/* Login form */}
+              <div
+                className={`auth-tab-panel${tab === "login" ? " auth-tab-panel--visible" : ""}`}
+                aria-hidden={tab !== "login"}
+              >
+                <form className="auth-form" onSubmit={handleLoginSubmit} noValidate>
                   <div className="field">
-                    <label htmlFor="reg-store-name">매장명</label>
+                    <label htmlFor="login-email">이메일</label>
                     <input
-                      id="reg-store-name"
-                      name="storeName"
+                      id="login-email"
+                      ref={emailRef}
+                      autoComplete="email"
+                      name="email"
+                      onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
+                      required
+                      type="email"
+                      value={loginForm.email}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="login-password">비밀번호</label>
+                    <input
+                      id="login-password"
+                      autoComplete="current-password"
+                      minLength={8}
+                      name="password"
                       onChange={(event) =>
-                        setRegisterForm((current) => ({ ...current, storeName: event.target.value }))
+                        setLoginForm((current) => ({ ...current, password: event.target.value }))
                       }
                       required
-                      value={registerForm.storeName}
+                      type="password"
+                      value={loginForm.password}
                     />
                   </div>
+
+                  <div className="login-options">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={rememberEmail}
+                        onChange={(event) => setRememberEmail(event.target.checked)}
+                      />
+                      아이디 저장
+                    </label>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={autoLogin}
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+                          setAutoLogin(checked);
+                          setLoginForm((current) => ({ ...current, autoLogin: checked }));
+                        }}
+                      />
+                      자동 로그인
+                    </label>
+                  </div>
+
+                  <button className="auth-submit" disabled={submitting} type="submit">
+                    {submitting ? "로그인 중…" : "로그인"}
+                  </button>
+                </form>
+              </div>
+
+              {/* Register form */}
+              <div
+                className={`auth-tab-panel${tab === "register" ? " auth-tab-panel--visible" : ""}`}
+                aria-hidden={tab !== "register"}
+              >
+                <form className="auth-form" onSubmit={handleRegisterSubmit} noValidate>
                   <div className="field">
-                    <label htmlFor="reg-phone">연락처</label>
+                    <label htmlFor="reg-name">이름</label>
                     <input
-                      id="reg-phone"
-                      name="storePhone"
-                      onChange={(event) =>
-                        setRegisterForm((current) => ({ ...current, storePhone: event.target.value }))
-                      }
-                      value={registerForm.storePhone}
+                      id="reg-name"
+                      name="name"
+                      onChange={(event) => setRegisterForm((current) => ({ ...current, name: event.target.value }))}
+                      required
+                      value={registerForm.name}
                     />
                   </div>
-                </div>
 
-                <div className="field">
-                  <label htmlFor="reg-store-address">매장주소</label>
-                  <div className="field-inline">
+                  <div className="field">
+                    <label htmlFor="reg-email">이메일</label>
                     <input
-                      id="reg-store-address"
-                      name="roadAddress"
-                      readOnly
-                      value={registerForm.roadAddress}
-                      onChange={(event) =>
-                        setRegisterForm((current) => ({ ...current, roadAddress: event.target.value }))
-                      }
+                      id="reg-email"
+                      autoComplete="email"
+                      name="email"
+                      onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))}
+                      required
+                      type="email"
+                      value={registerForm.email}
                     />
-                    <button className="btn-outline" onClick={handleAddressSearch} type="button">
-                      주소 검색
-                    </button>
                   </div>
-                </div>
 
-                <div className="field">
-                  <label htmlFor="reg-address-detail">상세주소</label>
-                  <input
-                    id="reg-address-detail"
-                    name="addressDetail"
-                    onChange={(event) =>
-                      setRegisterForm((current) => ({ ...current, addressDetail: event.target.value }))
-                    }
-                    value={registerForm.addressDetail}
-                  />
-                </div>
-
-                {addressHint ? (
-                  <div className="banner" role="status">
-                    {addressHint}
+                  <div className="field">
+                    <label htmlFor="reg-password">비밀번호</label>
+                    <input
+                      id="reg-password"
+                      autoComplete="new-password"
+                      minLength={8}
+                      name="password"
+                      onChange={(event) =>
+                        setRegisterForm((current) => ({ ...current, password: event.target.value }))
+                      }
+                      required
+                      type="password"
+                      value={registerForm.password}
+                    />
                   </div>
-                ) : null}
 
-                <button className="auth-submit" disabled={submitting} type="submit">
-                  {submitting ? "신청 중…" : "가입 신청"}
-                </button>
-              </form>
-            )}
+                  <div className="field-row">
+                    <div className="field">
+                      <label htmlFor="reg-store-name">매장명</label>
+                      <input
+                        id="reg-store-name"
+                        name="storeName"
+                        onChange={(event) =>
+                          setRegisterForm((current) => ({ ...current, storeName: event.target.value }))
+                        }
+                        required
+                        value={registerForm.storeName}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="reg-phone">연락처</label>
+                      <input
+                        id="reg-phone"
+                        name="storePhone"
+                        onChange={(event) =>
+                          setRegisterForm((current) => ({ ...current, storePhone: event.target.value }))
+                        }
+                        value={registerForm.storePhone}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="reg-store-address">매장주소</label>
+                    <div className="field-inline">
+                      <input
+                        id="reg-store-address"
+                        name="roadAddress"
+                        readOnly
+                        value={registerForm.roadAddress}
+                        onChange={(event) =>
+                          setRegisterForm((current) => ({ ...current, roadAddress: event.target.value }))
+                        }
+                      />
+                      <button className="btn-outline" onClick={handleAddressSearch} type="button">
+                        주소 검색
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="reg-address-detail">상세주소</label>
+                    <input
+                      id="reg-address-detail"
+                      name="addressDetail"
+                      onChange={(event) =>
+                        setRegisterForm((current) => ({ ...current, addressDetail: event.target.value }))
+                      }
+                      value={registerForm.addressDetail}
+                    />
+                  </div>
+
+                  {addressHint ? (
+                    <div className="banner" role="status">
+                      {addressHint}
+                    </div>
+                  ) : null}
+
+                  <button className="auth-submit" disabled={submitting} type="submit">
+                    {submitting ? "신청 중…" : "가입 신청"}
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
         </div>
       </section>
